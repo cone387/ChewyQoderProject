@@ -95,39 +95,45 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
     onClose()
   }
 
-  // 处理描述文本变化，自动提取#标签
+  // 处理描述文本变化，自动提取#标签（只在空格后触发）
   const handleDescriptionChange = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value
     setDescription(text)
 
-    // 提取 #标签
-    const tagMatches = text.match(/#(\S+)/g)
+    // 提取 #标签 - 只匹配 "#标签名 " 格式（后面必须有空格）
+    const tagMatches = text.match(/#(\S+)\s/g)
     if (tagMatches) {
-      const tagNames = tagMatches.map(tag => tag.slice(1)) // 移除 #
-      setExtractedTags(tagNames)
-
+      const tagNames = tagMatches.map(tag => tag.slice(1, -1)) // 移除 # 和空格
+      const newTags: string[] = []
+      
       // 自动创建或匹配标签
       for (const tagName of tagNames) {
+        if (!tagName.trim()) continue
+        
         const existingTag = tags.find(t => t.name === tagName)
         if (existingTag) {
           // 已存在，添加到选中列表
           if (!selectedTags.includes(existingTag.id)) {
-            setSelectedTags([...selectedTags, existingTag.id])
+            setSelectedTags(prev => [...prev, existingTag.id])
           }
         } else {
-          // 不存在，创建新标签
-          try {
-            const newTag = await tagService.createTag({ name: tagName, color: '#3B82F6' })
-            setTags([...tags, newTag])
-            setSelectedTags([...selectedTags, newTag.id])
-          } catch (error) {
-            console.error('创建标签失败:', error)
+          // 检查是否已经在处理队列中
+          if (!newTags.includes(tagName)) {
+            newTags.push(tagName)
+            // 不存在，创建新标签
+            try {
+              const newTag = await tagService.createTag({ name: tagName, color: '#3B82F6' })
+              setTags(prev => [...prev, newTag])
+              setSelectedTags(prev => [...prev, newTag.id])
+            } catch (error) {
+              console.error('创建标签失败:', error)
+            }
           }
         }
       }
 
-      // 从描述中移除#标签
-      const cleanedText = text.replace(/#\S+\s*/g, '').trim()
+      // 从描述中移除#标签（包括后面的空格）
+      const cleanedText = text.replace(/#\S+\s/g, '').trim()
       setDescription(cleanedText)
     }
   }
@@ -205,7 +211,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
 
           {/* 状态 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+            <label className="block text-xs font-medium text-gray-700 mb-3">
               状态
             </label>
             <div className="flex flex-wrap gap-2">
@@ -230,7 +236,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
 
           {/* 优先级 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+            <label className="block text-xs font-medium text-gray-700 mb-3">
               优先级
             </label>
             <div className="flex flex-wrap gap-2">
@@ -255,7 +261,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
 
           {/* 所属项目 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+            <label className="block text-xs font-medium text-gray-700 mb-3">
               <FolderKanban className="w-4 h-4 inline mr-1.5" />
               所属项目
             </label>
@@ -277,7 +283,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 开始时间 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
+              <label className="block text-xs font-medium text-gray-700 mb-3">
                 <Clock className="w-4 h-4 inline mr-1.5" />
                 开始时间
               </label>
@@ -291,7 +297,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
 
             {/* 截止时间 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
+              <label className="block text-xs font-medium text-gray-700 mb-3">
                 <Calendar className="w-4 h-4 inline mr-1.5" />
                 截止时间
               </label>
@@ -307,7 +313,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
           {/* 标签选择 */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-xs font-medium text-gray-700">
                 <TagIcon className="w-4 h-4 inline mr-1.5" />
                 标签
               </label>
@@ -373,67 +379,23 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
                 })}
               </div>
             )}
-
-            {/* 标签选择区 */}
-            <div className="border-2 border-gray-200 rounded-xl p-4 max-h-40 overflow-y-auto bg-white">
-              {tags.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-2">暂无标签</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {tags.map(tag => (
-                    <button
-                      key={tag.id}
-                      onClick={() => toggleTag(tag.id)}
-                      className={cn(
-                        'px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 border-2',
-                        'hover:scale-105 active:scale-95',
-                        selectedTags.includes(tag.id)
-                          ? 'bg-purple-100 text-purple-700 border-purple-300 shadow-sm'
-                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100 hover:border-gray-300'
-                      )}
-                    >
-                      {tag.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
             <p className="text-xs text-gray-500 mt-2">
-              💡 提示：在描述中输入 "#标签名" 可自动提取并创建标签
+              💡 提示：在描述中输入 "#标签名 " 后加空格自动提取标签
             </p>
           </div>
         </div>
 
-        {/* 内容补充区 */}
-        <div className="space-y-5">
-          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-            <span className="w-1 h-4 bg-green-500 rounded"></span>
-            内容补充
-          </h3>
-
-          {/* 描述 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              描述
-            </label>
-            <textarea
-              value={description}
-              onChange={handleDescriptionChange}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[150px] resize-none transition-all duration-200 hover:border-gray-300"
-              placeholder="添加任务描述... (输入 #标签名 自动提取标签)"
-            />
-          </div>
-
-          {/* 评论区（预留） */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              评论
-            </label>
-            <textarea
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px] resize-none transition-all duration-200 hover:border-gray-300"
-              placeholder="添加评论..."
-            />
-          </div>
+        {/* 描述 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            描述
+          </label>
+          <textarea
+            value={description}
+            onChange={handleDescriptionChange}
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[150px] resize-none transition-all duration-200 hover:border-gray-300"
+            placeholder="添加任务描述... (输入 '#标签名 ' 后加空格自动提取标签)"
+          />
         </div>
 
         {/* 任务元信息（创建时间等） */}
