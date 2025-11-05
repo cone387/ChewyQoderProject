@@ -1,5 +1,5 @@
 import apiClient from './api'
-import type { Task } from '@/types'
+import type { Task, SystemListType, SystemListResponse, BatchUpdateRequest, BatchUpdateResponse } from '@/types'
 
 // 定义分页响应类型
 interface PaginatedResponse<T> {
@@ -53,5 +53,26 @@ export const taskService = {
   getStatistics: async (): Promise<any> => {
     const response = await apiClient.get('/tasks/statistics/')
     return response.data
+  },
+
+  getSystemList: async (type: SystemListType): Promise<SystemListResponse> => {
+    const response = await apiClient.get<SystemListResponse>('/tasks/system/', {
+      params: { type }
+    })
+    return response.data
+  },
+
+  batchUpdate: async (data: BatchUpdateRequest): Promise<BatchUpdateResponse> => {
+    const response = await apiClient.post<BatchUpdateResponse>('/tasks/batch_update/', data)
+    return response.data
+  },
+
+  restoreTask: async (id: number): Promise<Task> => {
+    const response = await apiClient.post<Task>(`/tasks/${id}/restore/`)
+    return response.data
+  },
+
+  permanentDelete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/tasks/${id}/permanent_delete/`)
   },
 }
