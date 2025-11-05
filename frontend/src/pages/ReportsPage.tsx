@@ -1,28 +1,107 @@
+import { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { TrendingUp, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { taskService } from '@/services/task'
+import toast from 'react-hot-toast'
+
+interface Statistics {
+  summary: {
+    total: number
+    completed: number
+    in_progress: number
+    overdue: number
+    completion_rate: number
+  }
+  status_distribution: Array<{ status: string; count: number }>
+  priority_distribution: Array<{ priority: string; count: number }>
+  weekly_data: Array<{ date: string; completed: number; total: number }>
+  project_distribution: Array<{ project__id: number; project__name: string; count: number }>
+  tag_stats: Array<{ tag__id: number; tag__name: string; count: number }>
+}
 
 const ReportsPage = () => {
-  const weeklyData = [
-    { name: '周一', completed: 12, total: 15 },
-    { name: '周二', completed: 10, total: 14 },
-    { name: '周三', completed: 15, total: 18 },
-    { name: '周四', completed: 8, total: 12 },
-    { name: '周五', completed: 14, total: 16 },
-    { name: '周六', completed: 6, total: 8 },
-    { name: '周日', completed: 4, total: 6 },
-  ]
+  const [stats, setStats] = useState<Statistics | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const priorityData = [
-    { name: '高优先级', value: 25, color: '#EF4444' },
-    { name: '中优先级', value: 45, color: '#F59E0B' },
-    { name: '低优先级', value: 30, color: '#3B82F6' },
-  ]
+  useEffect(() => {
+    loadStatistics()
+  }, [])
 
-  const stats = [
-    { label: '总任务数', value: '128', icon: TrendingUp, color: 'blue' },
-    { label: '已完成', value: '89', icon: CheckCircle, color: 'green' },
-    { label: '进行中', value: '24', icon: Clock, color: 'yellow' },
-    { label: '已逾期', value: '15', icon: AlertCircle, color: 'red' },
+  const loadStatistics = async () => {
+    try {
+      setIsLoading(true)
+      const data = await taskService.getStatistics()
+      setStats(data)
+    } catch (error) {
+      console.error('加载统计数据失败:', error)
+      toast.error('加载统计数据失败')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">加载中...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!stats) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-gray-600">暂无统计数据</p>
+      </div>
+    )
+  }
+
+  const statusLabels: Record<string, string> = {
+    todo: '待办',
+    in_progress: '进行中',
+    completed: '已完成',
+  }
+
+  const priorityLabels: Record<string, string> = {
+    none: '无',
+    low: '低',
+    medium: '中',
+    high: '高',
+    urgent: '紧急',
+  }
+
+  const priorityColors: Record<string, string> = {
+    none: '#94A3B8',
+    low: '#3B82F6',
+    medium: '#F59E0B',
+    high: '#F97316',
+    urgent: '#EF4444',
+  }
+
+  // 转换每周数据格式
+  const weeklyData = stats.weekly_data.map(item => ({
+    name: new Date(item.date).toLocaleDateString('zh-CN', { weekday: 'short' }),
+    completed: item.completed,
+    total: item.total,
+  }))
+
+  // 转换优先级数据
+  const priorityData = stats.priority_distribution
+    .filter(item => item.priority !== 'none')
+    .map(item => ({
+      name: priorityLabels[item.priority],
+      value: item.count,
+      color: priorityColors[item.priority],
+    }))
+
+  const summaryStats = [
+    { label: '总任务数', value: stats.summary.total.toString(), icon: TrendingUp, color: 'blue' },
+    { label: '已完成', value: stats.summary.completed.toString(), icon: CheckCircle, color: 'green' },
+    { label: '进行中', value: stats.summary.in_progress.toString(), icon: Clock, color: 'yellow' },
+    { label: '已逾期', value: stats.summary.overdue.toString(), icon: AlertCircle, color: 'red' },
   ]
 
   const colorMap: Record<string, string> = {
@@ -43,7 +122,7 @@ const ReportsPage = () => {
 
         {/* 统计卡片 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {stats.map((stat) => (
+          {summaryStats.map((stat) => (
             <div key={stat.label} className="bg-white rounded-lg p-6 shadow border border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
@@ -108,10 +187,19 @@ const ReportsPage = () => {
             AI 智能分析
           </h3>
           <div className="space-y-2 text-gray-700">
-            <p>• 本周你完成了 69 个任务,比上周提高了 15%,表现优秀!</p>
-            <p>• 你在周三的工作效率最高,建议将重要任务安排在这一天。</p>
-            <p>• 有 15 个任务已逾期,建议优先处理高优先级的逾期任务。</p>
-            <p>• 你倾向于使用「工作」和「学习」标签,保持了良好的任务分类习惯。</p>
+            <p>• 你当前有 {stats.summary.total} 个任务，已完成 {stats.summary.completed} 个，完成率 {stats.summary.completion_rate}%。</p>
+            {stats.summary.overdue > 0 && (
+              <p>• 有 {stats.summary.overdue} 个任务已逾期，建议优先处理高优先级的逾期任务。</p>
+            )}
+            {stats.tag_stats.length > 0 && (
+              <p>• 你最常使用的标签是「{stats.tag_stats[0].tag__name}」，保持了良好的任务分类习惯。</p>
+            )}
+            {stats.summary.in_progress > 0 && (
+              <p>• 当前有 {stats.summary.in_progress} 个任务进行中，建议保持专注，逐个完成。</p>
+            )}
+            {stats.summary.completion_rate >= 70 && (
+              <p>• 你的完成率很高，表现优秀！继续保持。</p>
+            )}
           </div>
         </div>
       </div>

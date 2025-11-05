@@ -3,13 +3,28 @@ import { Plus, Search, Filter, FolderKanban, Tag as TagIcon, X } from 'lucide-re
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Modal from '@/components/ui/Modal'
-import TaskItem from '@/components/task/TaskItem'
+import SortableTaskItem from '@/components/task/SortableTaskItem'
 import TaskDetail from '@/components/task/TaskDetail'
 import { Task, Project, Tag } from '@/types'
 import { taskService } from '@/services/task'
 import { projectService } from '@/services/project'
 import { tagService } from '@/services/tag'
 import toast from 'react-hot-toast'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -24,6 +39,14 @@ export default function TasksPage() {
   const [filterProject, setFilterProject] = useState<number | null>(null)
   const [filterTags, setFilterTags] = useState<number[]>([])
   const [showTagDropdown, setShowTagDropdown] = useState(false)
+
+  // 拖动传感器
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
 
   useEffect(() => {
     loadTasks()
@@ -155,6 +178,36 @@ export default function TasksPage() {
     )
     return matchesSearch && matchesStatus && matchesProject && matchesTags
   })
+
+  // 拖动结束处理
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      const oldIndex = filteredTasks.findIndex(task => task.id === active.id)
+      const newIndex = filteredTasks.findIndex(task => task.id === over.id)
+
+      const newTasks = arrayMove(filteredTasks, oldIndex, newIndex)
+      
+      // 更新本地状态
+      setTasks(newTasks)
+
+      // 更新后端 order 字段
+      try {
+        await Promise.all(
+          newTasks.map((task, index) =>
+            taskService.updateTask(task.id, { order: index })
+          )
+        )
+        toast.success('排序已保存')
+      } catch (error) {
+        console.error('保存排序失败:', error)
+        toast.error('保存排序失败')
+        // 恢复原来的顺序
+        loadTasks()
+      }
+    }
+  }
 
   if (isLoading) {
     return (
@@ -335,18 +388,29 @@ export default function TasksPage() {
                 <p className="text-sm mt-2">点击上方按钮创建新任务</p>
               </div>
             ) : (
-              <div className="p-4 space-y-2">
-                {filteredTasks.map((task) => (
-                  <TaskItem
-                    key={task.id}
-                    task={task}
-                    onToggleComplete={handleToggleComplete}
-                    onClick={setSelectedTask}
-                    onEdit={(task) => setSelectedTask(task)}
-                    onDelete={() => handleDeleteTask(task.id)}
-                  />
-                ))}
-              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={filteredTasks.map(t => t.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="p-4 space-y-2">
+                    {filteredTasks.map((task) => (
+                      <SortableTaskItem
+                        key={task.id}
+                        task={task}
+                        onToggleComplete={handleToggleComplete}
+                        onClick={setSelectedTask}
+                        onEdit={(task: Task) => setSelectedTask(task)}
+                        onDelete={() => handleDeleteTask(task.id)}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
           </div>
         </div>

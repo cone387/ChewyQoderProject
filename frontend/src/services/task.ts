@@ -49,4 +49,9 @@ export const taskService = {
     const response = await apiClient.get<Task[]>('/tasks/today/')
     return response.data
   },
+
+  getStatistics: async (): Promise<any> => {
+    const response = await apiClient.get('/tasks/statistics/')
+    return response.data
+  },
 }
