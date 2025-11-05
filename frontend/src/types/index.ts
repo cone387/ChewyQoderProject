@@ -36,6 +36,7 @@ export interface Task {
   repeat?: RepeatType
   order: number
   is_starred: boolean
+  is_deleted: boolean
   tags?: number[] | Tag[]
   attachments?: Attachment[]
   comments?: Comment[]
@@ -74,13 +75,15 @@ export interface Project {
   user: number
   workspace?: number
   is_favorite: boolean
+  is_pinned: boolean
   is_archived: boolean
   view_mode?: 'list' | 'board' | 'calendar'
   order: number
   created_at: string
   updated_at: string
   tasks_count: number
-  completed_tasks_count: number
+  uncompleted_count: number
+  completed_count: number
 }
 
 export interface Workspace {
@@ -179,4 +182,21 @@ export interface FilterOptions {
   status?: Task['status'][]
   date_range?: { start: string; end: string }
   search?: string
+}
+
+export type SystemListType = 'inbox' | 'completed' | 'trash'
+
+export interface SystemListResponse {
+  results: Task[]
+  count: number
+}
+
+export interface BatchUpdateRequest {
+  task_ids: number[]
+  updates: Partial<Task>
+}
+
+export interface BatchUpdateResponse {
+  updated_count: number
+  tasks: Task[]
 }

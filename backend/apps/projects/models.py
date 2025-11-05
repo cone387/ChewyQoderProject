@@ -16,6 +16,7 @@ class Project(models.Model):
         verbose_name='所属用户'
     )
     is_favorite = models.BooleanField(default=False, verbose_name='是否收藏')
+    is_pinned = models.BooleanField(default=False, verbose_name='是否置顶')
     order = models.IntegerField(default=0, verbose_name='排序')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
