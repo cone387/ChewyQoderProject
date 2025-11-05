@@ -244,40 +244,29 @@ export default function DashboardPage() {
         }}
       />
 
-      {/* 新建任务弹窗 */}
-      <Modal
+      {/* 新建任务弹窗 - 使用统一的TaskDetail组件 */}
+      <TaskDetail
+        task={null}
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false)
           setNewTaskTitle('')
         }}
-        title="新建任务"
-      >
-        <div className="space-y-4">
-          <Input
-            label="任务标题"
-            placeholder="输入任务标题..."
-            value={newTaskTitle}
-            onChange={(e) => setNewTaskTitle(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleCreateTask()}
-            autoFocus
-          />
-          <div className="flex justify-end gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setIsModalOpen(false)
-                setNewTaskTitle('')
-              }}
-            >
-              取消
-            </Button>
-            <Button variant="primary" onClick={handleCreateTask}>
-              创建
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onUpdate={() => {}}
+        onDelete={() => {}}
+        onCreate={async (taskData) => {
+          try {
+            const newTask = await taskService.createTask(taskData)
+            setTasks([newTask, ...tasks])
+            setNewTaskTitle('')
+            setIsModalOpen(false)
+            toast.success('任务创建成功')
+          } catch (error) {
+            console.error('创建任务失败:', error)
+            toast.error('创建任务失败')
+          }
+        }}
+      />
     </div>
   )
 }

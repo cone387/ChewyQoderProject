@@ -16,9 +16,10 @@ interface TaskDetailProps {
   onClose: () => void
   onUpdate: (updates: Partial<Task>) => void
   onDelete: () => void
+  onCreate?: (taskData: Partial<Task>) => void // 新增：支持创建模式
 }
 
-const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailProps) => {
+const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: TaskDetailProps) => {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<Task['priority']>('none')
@@ -79,10 +80,17 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
     }
   }
 
-  if (!task) return null
+  if (!task && !onCreate) return null // 如果不是创建模式且没有task，则不显示
+
+  const isCreateMode = !task && !!onCreate // 判断是否为创建模式
 
   const handleSave = () => {
-    onUpdate({
+    if (!title.trim()) {
+      toast.error('请输入任务标题')
+      return
+    }
+
+    const taskData = {
       title,
       description,
       priority,
@@ -91,8 +99,21 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
       status,
       project: projectId || undefined,
       tags: selectedTags.length > 0 ? selectedTags : undefined,
-    })
+    }
+
+    if (isCreateMode && onCreate) {
+      onCreate(taskData)
+    } else {
+      onUpdate(taskData)
+    }
     onClose()
+  }
+
+  // 支持回车保存
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      handleSave()
+    }
   }
 
   // 处理描述文本变化，自动提取#标签（只在空格后触发）
@@ -213,7 +234,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="" size="xl">
-      <div className="space-y-6 max-h-[85vh] overflow-y-auto px-1">
+      <div className="space-y-6 max-h-[85vh] overflow-y-auto px-1" onKeyDown={handleKeyPress}>
         {/* 任务标题 */}
         <div>
           <Input
@@ -221,6 +242,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
             onChange={(e) => setTitle(e.target.value)}
             className="text-2xl font-bold border-0 px-0 focus:ring-0"
             placeholder="任务标题..."
+            autoFocus
           />
         </div>
 
@@ -233,7 +255,9 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
 
           {/* 状态 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <Circle className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            <span title="状态" className="flex-shrink-0">
+              <Circle className="w-4 h-4 text-gray-500" />
+            </span>
             <div className="flex flex-wrap gap-2 flex-1">
               {statusOptions.map((option) => (
                 <button
@@ -256,7 +280,9 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
 
           {/* 优先级 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <AlertCircle className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            <span title="优先级" className="flex-shrink-0">
+              <AlertCircle className="w-4 h-4 text-gray-500" />
+            </span>
             <div className="flex flex-wrap gap-2 flex-1">
               {priorityOptions.map((option) => (
                 <button
@@ -279,7 +305,9 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
 
           {/* 所属项目 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <FolderKanban className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            <span title="所属项目" className="flex-shrink-0">
+              <FolderKanban className="w-4 h-4 text-gray-500" />
+            </span>
             <select
               value={projectId || ''}
               onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
@@ -296,55 +324,57 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
 
           {/* 开始时间 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
-            <div className="flex-1 space-y-2">
-              <div className="flex gap-2">
-                {getQuickTimeOptions().map((option) => (
-                  <button
-                    key={option.label}
-                    onClick={() => setQuickStartDate(option.value)}
-                    className="px-2 py-1 text-xs bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all"
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
+            <span title="开始时间" className="flex-shrink-0">
+              <Clock className="w-4 h-4 text-gray-500" />
+            </span>
+            <div className="flex gap-2 flex-1 items-center">
+              {getQuickTimeOptions().map((option) => (
+                <button
+                  key={option.label}
+                  onClick={() => setQuickStartDate(option.value)}
+                  className="px-2 py-1 text-xs bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all flex-shrink-0"
+                >
+                  {option.label}
+                </button>
+              ))}
               <Input
                 type="datetime-local"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full text-xs border-2 hover:border-gray-300 transition-all duration-200"
+                className="flex-1 text-xs border-2 hover:border-gray-300 transition-all duration-200"
               />
             </div>
           </div>
 
           {/* 截止时间 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <Calendar className="w-4 h-4 text-gray-500 flex-shrink-0" />
-            <div className="flex-1 space-y-2">
-              <div className="flex gap-2">
-                {getQuickTimeOptions().map((option) => (
-                  <button
-                    key={option.label}
-                    onClick={() => setQuickDueDate(option.value)}
-                    className="px-2 py-1 text-xs bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all"
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
+            <span title="截止时间" className="flex-shrink-0">
+              <Calendar className="w-4 h-4 text-gray-500" />
+            </span>
+            <div className="flex gap-2 flex-1 items-center">
+              {getQuickTimeOptions().map((option) => (
+                <button
+                  key={option.label}
+                  onClick={() => setQuickDueDate(option.value)}
+                  className="px-2 py-1 text-xs bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all flex-shrink-0"
+                >
+                  {option.label}
+                </button>
+              ))}
               <Input
                 type="datetime-local"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full text-xs border-2 hover:border-gray-300 transition-all duration-200"
+                className="flex-1 text-xs border-2 hover:border-gray-300 transition-all duration-200"
               />
             </div>
           </div>
 
           {/* 标签 - 图标 + 选项 */}
           <div className="flex items-start gap-3">
-            <TagIcon className="w-4 h-4 text-gray-500 flex-shrink-0 mt-1" />
+            <span title="标签" className="flex-shrink-0 mt-1">
+              <TagIcon className="w-4 h-4 text-gray-500" />
+            </span>
             <div className="flex-1">
               <div className="flex items-center justify-between mb-2">
                 <button
@@ -425,30 +455,34 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
             value={description}
             onChange={handleDescriptionChange}
             className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[150px] resize-none transition-all duration-200 hover:border-gray-300"
-            placeholder="添加任务描述... (输入 '#标签名 ' 后加空格自动提取标签)"
+            placeholder="添加任务描述... (输入 '#标签名 ' 后加空格自动提取标签，按 Cmd/Ctrl+Enter 保存)"
           />
         </div>
 
         {/* 任务元信息（创建时间等） */}
         {task && (
-          <div className="text-xs text-gray-500 pt-4 border-t border-gray-200">
-            <p>创建时间：{format(new Date(task.created_at), 'yyyy-MM-dd HH:mm')}</p>
+          <div className="text-xs text-gray-500 pt-4 border-t border-gray-200 flex items-center gap-6">
+            <span>创建时间：{format(new Date(task.created_at), 'yyyy-MM-dd HH:mm')}</span>
             {task.updated_at !== task.created_at && (
-              <p>修改时间：{format(new Date(task.updated_at), 'yyyy-MM-dd HH:mm')}</p>
+              <span>修改时间：{format(new Date(task.updated_at), 'yyyy-MM-dd HH:mm')}</span>
             )}
           </div>
         )}
 
         {/* 底部操作栏 */}
         <div className="flex items-center justify-between pt-6 border-t-2 border-gray-200 sticky bottom-0 bg-white -mx-1 px-1">
-          <Button
-            variant="outline"
-            onClick={handleDeleteTask}
-            className="text-red-600 hover:bg-red-50 border-2 border-red-200 hover:border-red-300 transition-all duration-200 hover:scale-105 active:scale-95 shadow-sm"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            删除任务
-          </Button>
+          {!isCreateMode ? (
+            <Button
+              variant="outline"
+              onClick={handleDeleteTask}
+              className="text-red-600 hover:bg-red-50 border-2 border-red-200 hover:border-red-300 transition-all duration-200 hover:scale-105 active:scale-95 shadow-sm"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              删除任务
+            </Button>
+          ) : (
+            <div></div>
+          )}
           <div className="flex gap-3">
             <Button 
               variant="outline" 
@@ -462,7 +496,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
               onClick={handleSave}
               className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-md shadow-blue-200 transition-all duration-200 hover:scale-105 active:scale-95 hover:shadow-lg"
             >
-              保存
+              {isCreateMode ? '创建' : '保存'}
             </Button>
           </div>
         </div>
