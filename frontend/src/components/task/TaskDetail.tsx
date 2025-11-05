@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Tag as TagIcon, Trash2, FolderKanban, X, Plus, Clock } from 'lucide-react'
+import { Calendar, Tag as TagIcon, Trash2, FolderKanban, X, Plus, Clock, Circle, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { Task, Project, Tag } from '@/types'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
 import Modal from '../ui/Modal'
-import { format } from 'date-fns'
+import { format, addDays, startOfDay, endOfDay, setHours, setMinutes } from 'date-fns'
 import { cn } from '@/utils/cn'
 import { projectService } from '@/services/project'
 import { tagService } from '@/services/tag'
@@ -175,6 +175,28 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
     }
   }
 
+  // 快捷时间选项
+  const getQuickTimeOptions = () => {
+    const now = new Date()
+    return [
+      { label: '今天', value: format(startOfDay(now), "yyyy-MM-dd'T'HH:mm") },
+      { label: '明天', value: format(startOfDay(addDays(now, 1)), "yyyy-MM-dd'T'HH:mm") },
+      { label: '后天', value: format(startOfDay(addDays(now, 2)), "yyyy-MM-dd'T'HH:mm") },
+      { label: '下周', value: format(startOfDay(addDays(now, 7)), "yyyy-MM-dd'T'HH:mm") },
+    ]
+  }
+
+  const setQuickStartDate = (dateStr: string) => {
+    setStartDate(dateStr)
+  }
+
+  const setQuickDueDate = (dateStr: string) => {
+    // 截止时间设置为当天 23:59
+    const date = new Date(dateStr)
+    const endDate = setMinutes(setHours(date, 23), 59)
+    setDueDate(format(endDate, "yyyy-MM-dd'T'HH:mm"))
+  }
+
   const priorityOptions = [
     { value: 'none', label: '无', color: 'bg-sky-100 text-sky-700 border-sky-300', icon: '⚪' },
     { value: 'low', label: '低', color: 'bg-blue-100 text-blue-700 border-blue-300', icon: '🔵' },
@@ -203,72 +225,65 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
         </div>
 
         {/* 任务属性区 - 浅灰背景区分 */}
-        <div className="bg-gray-50 rounded-2xl p-6 space-y-5 border border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-            <span className="w-1 h-4 bg-blue-500 rounded"></span>
+        <div className="bg-gray-50 rounded-2xl p-5 space-y-4 border border-gray-200">
+          <h3 className="text-xs font-semibold text-gray-600 mb-3 flex items-center gap-2">
+            <span className="w-1 h-3 bg-blue-500 rounded"></span>
             任务属性
           </h3>
 
-          {/* 状态 */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-3">
-              状态
-            </label>
-            <div className="flex flex-wrap gap-2">
+          {/* 状态 - 图标 + 选项 */}
+          <div className="flex items-center gap-3">
+            <Circle className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            <div className="flex flex-wrap gap-2 flex-1">
               {statusOptions.map((option) => (
                 <button
                   key={option.value}
                   onClick={() => setStatus(option.value as Task['status'])}
                   className={cn(
-                    'px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border-2',
+                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 border-2',
                     'hover:scale-105 active:scale-95',
                     status === option.value
                       ? `${option.color} shadow-md`
                       : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
                   )}
                 >
-                  <span className="mr-1.5">{option.icon}</span>
+                  <span className="mr-1">{option.icon}</span>
                   {option.label}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* 优先级 */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-3">
-              优先级
-            </label>
-            <div className="flex flex-wrap gap-2">
+          {/* 优先级 - 图标 + 选项 */}
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            <div className="flex flex-wrap gap-2 flex-1">
               {priorityOptions.map((option) => (
                 <button
                   key={option.value}
                   onClick={() => setPriority(option.value as Task['priority'])}
                   className={cn(
-                    'px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border-2',
+                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 border-2',
                     'hover:scale-105 active:scale-95',
                     priority === option.value
                       ? `${option.color} shadow-md`
                       : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
                   )}
                 >
-                  <span className="mr-1.5">{option.icon}</span>
+                  <span className="mr-1">{option.icon}</span>
                   {option.label}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* 所属项目 */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-3">
-              <FolderKanban className="w-4 h-4 inline mr-1.5" />
-              所属项目
-            </label>
+          {/* 所属项目 - 图标 + 选项 */}
+          <div className="flex items-center gap-3">
+            <FolderKanban className="w-4 h-4 text-gray-500 flex-shrink-0" />
             <select
               value={projectId || ''}
               onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 hover:border-gray-300"
+              className="flex-1 px-3 py-1.5 text-xs border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 hover:border-gray-300"
             >
               <option value="">无项目</option>
               {projects.map((project) => (
@@ -279,109 +294,125 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
             </select>
           </div>
 
-          {/* 时间设置 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* 开始时间 */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-3">
-                <Clock className="w-4 h-4 inline mr-1.5" />
-                开始时间
-              </label>
+          {/* 开始时间 - 图标 + 选项 */}
+          <div className="flex items-center gap-3">
+            <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="flex gap-2">
+                {getQuickTimeOptions().map((option) => (
+                  <button
+                    key={option.label}
+                    onClick={() => setQuickStartDate(option.value)}
+                    className="px-2 py-1 text-xs bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all"
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
               <Input
                 type="datetime-local"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full border-2 hover:border-gray-300 transition-all duration-200"
-              />
-            </div>
-
-            {/* 截止时间 */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-3">
-                <Calendar className="w-4 h-4 inline mr-1.5" />
-                截止时间
-              </label>
-              <Input
-                type="datetime-local"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full border-2 hover:border-gray-300 transition-all duration-200"
+                className="w-full text-xs border-2 hover:border-gray-300 transition-all duration-200"
               />
             </div>
           </div>
 
-          {/* 标签选择 */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-xs font-medium text-gray-700">
-                <TagIcon className="w-4 h-4 inline mr-1.5" />
-                标签
-              </label>
-              <button
-                onClick={() => setShowNewTagInput(!showNewTagInput)}
-                className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                新建标签
-              </button>
+          {/* 截止时间 - 图标 + 选项 */}
+          <div className="flex items-center gap-3">
+            <Calendar className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="flex gap-2">
+                {getQuickTimeOptions().map((option) => (
+                  <button
+                    key={option.label}
+                    onClick={() => setQuickDueDate(option.value)}
+                    className="px-2 py-1 text-xs bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all"
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <Input
+                type="datetime-local"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full text-xs border-2 hover:border-gray-300 transition-all duration-200"
+              />
             </div>
+          </div>
 
-            {/* 新建标签输入框 */}
-            {showNewTagInput && (
-              <div className="flex gap-2 mb-3">
-                <Input
-                  value={newTagName}
-                  onChange={(e) => setNewTagName(e.target.value)}
-                  placeholder="输入标签名称..."
-                  onKeyPress={(e) => e.key === 'Enter' && handleCreateNewTag()}
-                  className="flex-1"
-                />
-                <Button
-                  onClick={handleCreateNewTag}
-                  size="sm"
-                  className="bg-blue-500 hover:bg-blue-600"
+          {/* 标签 - 图标 + 选项 */}
+          <div className="flex items-start gap-3">
+            <TagIcon className="w-4 h-4 text-gray-500 flex-shrink-0 mt-1" />
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-2">
+                <button
+                  onClick={() => setShowNewTagInput(!showNewTagInput)}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
                 >
-                  创建
-                </Button>
-                <Button
-                  onClick={() => {
-                    setShowNewTagInput(false)
-                    setNewTagName('')
-                  }}
-                  variant="outline"
-                  size="sm"
-                >
-                  取消
-                </Button>
+                  <Plus className="w-3 h-3" />
+                  新建标签
+                </button>
               </div>
-            )}
 
-            {/* 显示已选标签 */}
-            {selectedTags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3 p-3 bg-purple-50 rounded-xl border border-purple-200">
-                {selectedTags.map(tagId => {
-                  const tag = tags.find(t => t.id === tagId)
-                  if (!tag) return null
-                  return (
-                    <span
-                      key={tag.id}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-full text-sm font-medium shadow-sm border border-purple-200 transition-all duration-200 hover:shadow-md"
-                    >
-                      {tag.name}
-                      <button
-                        onClick={() => handleDeleteTag(tag.id)}
-                        className="hover:bg-purple-200 rounded-full p-0.5 transition-colors"
+              {/* 新建标签输入框 */}
+              {showNewTagInput && (
+                <div className="flex gap-2 mb-2">
+                  <Input
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                    placeholder="输入标签名称..."
+                    onKeyPress={(e) => e.key === 'Enter' && handleCreateNewTag()}
+                    className="flex-1 text-xs"
+                  />
+                  <Button
+                    onClick={handleCreateNewTag}
+                    size="sm"
+                    className="bg-blue-500 hover:bg-blue-600 text-xs px-3 py-1"
+                  >
+                    创建
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setShowNewTagInput(false)
+                      setNewTagName('')
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs px-3 py-1"
+                  >
+                    取消
+                  </Button>
+                </div>
+              )}
+
+              {/* 显示已选标签 */}
+              {selectedTags.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {selectedTags.map(tagId => {
+                    const tag = tags.find(t => t.id === tagId)
+                    if (!tag) return null
+                    return (
+                      <span
+                        key={tag.id}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium border border-purple-200 transition-all duration-200 hover:shadow-sm"
                       >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </span>
-                  )
-                })}
-              </div>
-            )}
-            <p className="text-xs text-gray-500 mt-2">
-              💡 提示：在描述中输入 "#标签名 " 后加空格自动提取标签
-            </p>
+                        {tag.name}
+                        <button
+                          onClick={() => handleDeleteTag(tag.id)}
+                          className="hover:bg-purple-200 rounded-full p-0.5 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">暂无标签</p>
+              )}
+            </div>
           </div>
         </div>
 
