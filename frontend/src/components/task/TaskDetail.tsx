@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Tag, Trash2, FolderKanban } from 'lucide-react'
-import { Task, Project } from '@/types'
+import { Calendar, Tag as TagIcon, Trash2, FolderKanban, X } from 'lucide-react'
+import { Task, Project, Tag } from '@/types'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
 import Modal from '../ui/Modal'
 import { format } from 'date-fns'
 import { cn } from '@/utils/cn'
 import { projectService } from '@/services/project'
+import { tagService } from '@/services/tag'
+import toast from 'react-hot-toast'
 
 interface TaskDetailProps {
   task: Task | null
@@ -24,9 +26,13 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
   const [status, setStatus] = useState<Task['status']>('todo')
   const [projectId, setProjectId] = useState<number | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
+  const [selectedTags, setSelectedTags] = useState<number[]>([])
+  const [extractedTags, setExtractedTags] = useState<string[]>([])
 
   useEffect(() => {
     loadProjects()
+    loadTags()
   }, [])
 
   useEffect(() => {
@@ -39,6 +45,11 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
       setProjectId(
         task.project && typeof task.project === 'object' ? task.project.id : task.project || null
       )
+      // 设置已选标签
+      if (task.tags && Array.isArray(task.tags)) {
+        const tagIds = task.tags.map(t => typeof t === 'object' ? t.id : t).filter(Boolean) as number[]
+        setSelectedTags(tagIds)
+      }
     }
   }, [task])
 
@@ -53,6 +64,17 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
     }
   }
 
+  const loadTags = async () => {
+    try {
+      const data = await tagService.getTags()
+      if (Array.isArray(data)) {
+        setTags(data)
+      }
+    } catch (error) {
+      console.error('加载标签失败:', error)
+    }
+  }
+
   if (!task) return null
 
   const handleSave = () => {
@@ -63,12 +85,58 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
       due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
       status,
       project: projectId || undefined,
+      tags: selectedTags.length > 0 ? selectedTags : undefined,
     })
     onClose()
   }
 
+  // 处理描述文本变化，自动提取#标签
+  const handleDescriptionChange = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value
+    setDescription(text)
+
+    // 提取 #标签
+    const tagMatches = text.match(/#(\S+)/g)
+    if (tagMatches) {
+      const tagNames = tagMatches.map(tag => tag.slice(1)) // 移除 #
+      setExtractedTags(tagNames)
+
+      // 自动创建或匹配标签
+      for (const tagName of tagNames) {
+        const existingTag = tags.find(t => t.name === tagName)
+        if (existingTag) {
+          // 已存在，添加到选中列表
+          if (!selectedTags.includes(existingTag.id)) {
+            setSelectedTags([...selectedTags, existingTag.id])
+          }
+        } else {
+          // 不存在，创建新标签
+          try {
+            const newTag = await tagService.createTag({ name: tagName, color: '#3B82F6' })
+            setTags([...tags, newTag])
+            setSelectedTags([...selectedTags, newTag.id])
+          } catch (error) {
+            console.error('创建标签失败:', error)
+          }
+        }
+      }
+
+      // 从描述中移除#标签
+      const cleanedText = text.replace(/#\S+\s*/g, '').trim()
+      setDescription(cleanedText)
+    }
+  }
+
+  const toggleTag = (tagId: number) => {
+    if (selectedTags.includes(tagId)) {
+      setSelectedTags(selectedTags.filter(id => id !== tagId))
+    } else {
+      setSelectedTags([...selectedTags, tagId])
+    }
+  }
+
   const priorityOptions = [
-    { value: 'none', label: '无', color: 'bg-gray-100 text-gray-600' },
+    { value: 'none', label: '无', color: 'bg-sky-100 text-sky-700' },
     { value: 'low', label: '低', color: 'bg-blue-100 text-blue-600' },
     { value: 'medium', label: '中', color: 'bg-yellow-100 text-yellow-600' },
     { value: 'high', label: '高', color: 'bg-orange-100 text-orange-600' },
@@ -76,7 +144,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
   ]
 
   const statusOptions = [
-    { value: 'todo', label: '待办', color: 'bg-gray-100 text-gray-600' },
+    { value: 'todo', label: '待办', color: 'bg-purple-100 text-purple-700' },
     { value: 'in_progress', label: '进行中', color: 'bg-blue-100 text-blue-600' },
     { value: 'completed', label: '已完成', color: 'bg-green-100 text-green-600' },
   ]
@@ -120,7 +188,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
         {/* 优先级 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            <Tag className="w-4 h-4 inline mr-1" />
+            <TagIcon className="w-4 h-4 inline mr-1" />
             优先级
           </label>
           <div className="flex gap-2">
@@ -161,6 +229,63 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
           </select>
         </div>
 
+        {/* 标签选择 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            <TagIcon className="w-4 h-4 inline mr-1" />
+            标签
+          </label>
+          {/* 显示已选标签 */}
+          {selectedTags.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {selectedTags.map(tagId => {
+                const tag = tags.find(t => t.id === tagId)
+                if (!tag) return null
+                return (
+                  <span
+                    key={tag.id}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm"
+                  >
+                    {tag.name}
+                    <button
+                      onClick={() => toggleTag(tag.id)}
+                      className="hover:bg-purple-200 rounded-full p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )
+              })}
+            </div>
+          )}
+          {/* 标签选择区 */}
+          <div className="border border-gray-300 rounded-xl p-3 max-h-32 overflow-y-auto">
+            {tags.length === 0 ? (
+              <p className="text-sm text-gray-500">暂无标签，请在标签管理页面创建</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {tags.map(tag => (
+                  <button
+                    key={tag.id}
+                    onClick={() => toggleTag(tag.id)}
+                    className={cn(
+                      'px-3 py-1 rounded-full text-sm transition-all duration-200',
+                      selectedTags.includes(tag.id)
+                        ? 'bg-purple-100 text-purple-700 ring-2 ring-purple-300'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    {tag.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            提示：在描述中输入 "#标签名" 可自动提取并创建标签
+          </p>
+        </div>
+
         {/* 截止日期 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -182,9 +307,9 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
           </label>
           <textarea
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={handleDescriptionChange}
             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[120px] resize-none"
-            placeholder="添加任务描述..."
+            placeholder="添加任务描述... (输入 #标签名 自动提取标签)"
           />
         </div>
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Calendar, Star, TrendingUp, CheckCircle2 } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import TaskItem from '@/components/task/TaskItem'
+import TaskDetail from '@/components/task/TaskDetail'
 import Modal from '@/components/ui/Modal'
 import Input from '@/components/ui/Input'
 import { Task } from '@/types'
@@ -74,14 +75,27 @@ export default function DashboardPage() {
     }
   }
 
-  const handleToggleStar = async (task: Task) => {
+  const handleUpdateTask = async (id: number, updates: Partial<Task>) => {
     try {
-      const updated = await taskService.updateTask(task.id, { is_starred: !task.is_starred })
-      setTasks(tasks.map(t => t.id === task.id ? updated : t))
-      toast.success(updated.is_starred ? '已加星标' : '已取消星标')
+      const updated = await taskService.updateTask(id, updates)
+      setTasks(tasks.map(t => t.id === id ? updated : t))
+      toast.success('任务更新成功')
     } catch (error) {
       console.error('更新任务失败:', error)
       toast.error('更新任务失败')
+    }
+  }
+
+  const handleDeleteTask = async (id: number) => {
+    if (!confirm('确定要删除这个任务吗？')) return
+    try {
+      await taskService.deleteTask(id)
+      setTasks(tasks.filter(t => t.id !== id))
+      setSelectedTask(null)
+      toast.success('任务已删除')
+    } catch (error) {
+      console.error('删除任务失败:', error)
+      toast.error('删除任务失败')
     }
   }
 
@@ -181,8 +195,9 @@ export default function DashboardPage() {
                   key={task.id} 
                   task={task}
                   onToggleComplete={handleToggleComplete}
-                  onToggleStar={handleToggleStar}
                   onClick={setSelectedTask}
+                  onEdit={setSelectedTask}
+                  onDelete={() => handleDeleteTask(task.id)}
                 />
               ))}
             </div>
@@ -202,14 +217,32 @@ export default function DashboardPage() {
                   key={task.id} 
                   task={task}
                   onToggleComplete={handleToggleComplete}
-                  onToggleStar={handleToggleStar}
                   onClick={setSelectedTask}
+                  onEdit={setSelectedTask}
+                  onDelete={() => handleDeleteTask(task.id)}
                 />
               ))}
             </div>
           </div>
         )}
       </div>
+
+      {/* 任务详情弹窗 */}
+      <TaskDetail
+        task={selectedTask}
+        isOpen={!!selectedTask}
+        onClose={() => setSelectedTask(null)}
+        onUpdate={(updates) => {
+          if (selectedTask) {
+            handleUpdateTask(selectedTask.id, updates)
+          }
+        }}
+        onDelete={() => {
+          if (selectedTask) {
+            handleDeleteTask(selectedTask.id)
+          }
+        }}
+      />
 
       {/* 新建任务弹窗 */}
       <Modal
