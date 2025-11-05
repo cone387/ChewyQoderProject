@@ -55,6 +55,7 @@ class Task(models.Model):
         default='todo',
         verbose_name='状态'
     )
+    start_date = models.DateTimeField(null=True, blank=True, verbose_name='开始时间')
     due_date = models.DateTimeField(null=True, blank=True, verbose_name='截止时间')
     completed_at = models.DateTimeField(null=True, blank=True, verbose_name='完成时间')
     order = models.IntegerField(default=0, verbose_name='排序')

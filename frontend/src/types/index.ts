@@ -29,6 +29,7 @@ export interface Task {
   parent?: number
   priority: 'none' | 'low' | 'medium' | 'high' | 'urgent'
   status: 'todo' | 'in_progress' | 'completed'
+  start_date?: string
   due_date?: string
   completed_at?: string
   reminder?: string
