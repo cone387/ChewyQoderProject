@@ -1,10 +1,19 @@
 import apiClient from './api'
 import type { Task } from '@/types'
 
+// 定义分页响应类型
+interface PaginatedResponse<T> {
+  count: number
+  next: string | null
+  previous: string | null
+  results: T[]
+}
+
 export const taskService = {
   getTasks: async (params?: Record<string, any>): Promise<Task[]> => {
-    const response = await apiClient.get<Task[]>('/tasks/', { params })
-    return response.data
+    const response = await apiClient.get<PaginatedResponse<Task>>('/tasks/', { params })
+    // 如果是分页响应,返回 results 数组;否则假定它已经是数组
+    return response.data.results || (response.data as any)
   },
 
   getTask: async (id: number): Promise<Task> => {

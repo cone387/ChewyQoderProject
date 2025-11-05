@@ -7,6 +7,7 @@ interface AuthStore {
   setUser: (user: User | null) => void
   setTokens: (access: string, refresh: string) => void
   logout: () => void
+  checkAuth: () => void
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
@@ -25,5 +26,11 @@ export const useAuthStore = create<AuthStore>((set) => ({
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     set({ user: null, isAuthenticated: false })
+    window.location.href = '/login'
+  },
+  
+  checkAuth: () => {
+    const token = localStorage.getItem('access_token')
+    set({ isAuthenticated: !!token })
   },
 }))

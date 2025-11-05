@@ -1,5 +1,5 @@
 # Frontend Dockerfile
-FROM node:20-alpine AS builder
+FROM docker.m.daocloud.io/node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY package.json pnpm-lock.yaml* ./
 RUN npm install -g pnpm
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # Copy source code
 COPY . .
@@ -19,7 +19,7 @@ COPY . .
 RUN pnpm build
 
 # Production stage
-FROM nginx:alpine
+FROM docker.m.daocloud.io/nginx:alpine
 
 # Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
