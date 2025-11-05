@@ -4,7 +4,7 @@ import { useAuthStore } from '@/store/auth'
 import { 
   Inbox, CheckCircle2, Trash2, Plus, ChevronLeft, ChevronRight, 
   ChevronDown, ChevronUp, MoreHorizontal, Calendar, Tag, FolderKanban, 
-  BarChart3, Settings, LogOut, Edit2, Pin, PinOff
+  BarChart3, Settings, LogOut, Edit2, Star, StarOff
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { projectService } from '@/services/project'
@@ -40,9 +40,10 @@ export default function Layout() {
   const loadProjects = async () => {
     try {
       const data = await projectService.getProjects()
-      setProjects(data)
+      setProjects(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('加载项目列表失败:', error)
+      setProjects([])
     }
   }
 
@@ -53,11 +54,14 @@ export default function Layout() {
         taskService.getSystemList('completed'),
         taskService.getSystemList('trash')
       ])
-      setInboxCount(inbox.count)
-      setCompletedCount(completed.count)
-      setTrashCount(trash.count)
+      setInboxCount(inbox?.count || 0)
+      setCompletedCount(completed?.count || 0)
+      setTrashCount(trash?.count || 0)
     } catch (error) {
       console.error('加载系统清单数量失败:', error)
+      setInboxCount(0)
+      setCompletedCount(0)
+      setTrashCount(0)
     }
   }
 
@@ -71,16 +75,16 @@ export default function Layout() {
     e.stopPropagation()
     try {
       const updated = await projectService.togglePin(projectId)
-      setProjects(projects.map(p => p.id === projectId ? updated : p))
       toast.success(updated.is_pinned ? '已置顶' : '取消置顶')
-      loadProjects() // 重新加载以更新排序
+      // 重新加载项目列表以更新排序
+      await loadProjects()
     } catch (error) {
       toast.error('操作失败')
     }
   }
 
-  const pinnedProjects = projects.filter(p => p.is_pinned)
-  const normalProjects = projects.filter(p => !p.is_pinned)
+  const pinnedProjects = Array.isArray(projects) ? projects.filter(p => p.is_pinned) : []
+  const normalProjects = Array.isArray(projects) ? projects.filter(p => !p.is_pinned) : []
 
   const moreMenuItems = [
     { to: '/calendar', icon: Calendar, label: '日历' },
@@ -239,7 +243,7 @@ export default function Layout() {
                             className="p-1 hover:bg-gray-100 rounded transition-colors"
                             title="取消置顶"
                           >
-                            <PinOff className="w-3.5 h-3.5 text-gray-600" />
+                            <StarOff className="w-3.5 h-3.5 text-gray-600" />
                           </button>
                         </div>
                       )}
@@ -294,7 +298,7 @@ export default function Layout() {
                             className="p-1 hover:bg-gray-100 rounded transition-colors"
                             title="置顶"
                           >
-                            <Pin className="w-3.5 h-3.5 text-gray-600" />
+                            <Star className="w-3.5 h-3.5 text-gray-600" />
                           </button>
                         </div>
                       )}

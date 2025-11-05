@@ -59,8 +59,9 @@ export default function TasksPage() {
 
   useEffect(() => {
     // 从 location.state 获取视图参数
-    if (location.state?.view) {
-      setCurrentView(location.state.view)
+    const state = location.state as { view?: 'inbox' | 'completed' | 'trash' | number } | null
+    if (state?.view !== undefined) {
+      setCurrentView(state.view)
     }
   }, [location])
 
@@ -94,11 +95,7 @@ export default function TasksPage() {
         data = response.results
       }
 
-      if (Array.isArray(data)) {
-        setTasks(data)
-      } else {
-        setTasks([])
-      }
+      setTasks(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('加载任务失败:', error)
       toast.error('加载任务失败')
@@ -225,7 +222,7 @@ export default function TasksPage() {
   const groupedTasks = {
     starred: searchedTasks.filter(t => t.is_starred && t.status !== 'completed'),
     untagged: searchedTasks.filter(t => 
-      (!t.tags || t.tags.length === 0) && 
+      (!t.tags || (Array.isArray(t.tags) && t.tags.length === 0)) && 
       !t.is_starred && 
       t.status !== 'completed'
     ),
