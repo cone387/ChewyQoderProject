@@ -109,13 +109,6 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
     onClose()
   }
 
-  // 支持回车保存
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      handleSave()
-    }
-  }
-
   // 处理描述文本变化，自动提取#标签（只在空格后触发）
   const handleDescriptionChange = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value
@@ -234,12 +227,20 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="" size="xl">
-      <div className="space-y-6 max-h-[85vh] overflow-y-auto px-1" onKeyDown={handleKeyPress}>
+      <div className="space-y-6 max-h-[85vh] overflow-y-auto px-1">
         {/* 任务标题 */}
         <div>
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                handleSave()
+              } else if (e.key === 'Enter') {
+                e.preventDefault() // 阻止普通Enter键的默认行为
+              }
+            }}
             className="text-2xl font-bold border-0 px-0 focus:ring-0"
             placeholder="任务标题..."
             autoFocus
@@ -248,14 +249,9 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
 
         {/* 任务属性区 - 浅灰背景区分 */}
         <div className="bg-gray-50 rounded-2xl p-5 space-y-4 border border-gray-200">
-          <h3 className="text-xs font-semibold text-gray-600 mb-3 flex items-center gap-2">
-            <span className="w-1 h-3 bg-blue-500 rounded"></span>
-            任务属性
-          </h3>
-
           {/* 状态 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <span title="状态" className="flex-shrink-0">
+            <span title="状态" className="flex-shrink-0 cursor-help">
               <Circle className="w-4 h-4 text-gray-500" />
             </span>
             <div className="flex flex-wrap gap-2 flex-1">
@@ -280,7 +276,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
 
           {/* 优先级 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <span title="优先级" className="flex-shrink-0">
+            <span title="优先级" className="flex-shrink-0 cursor-help">
               <AlertCircle className="w-4 h-4 text-gray-500" />
             </span>
             <div className="flex flex-wrap gap-2 flex-1">
@@ -305,7 +301,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
 
           {/* 所属项目 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <span title="所属项目" className="flex-shrink-0">
+            <span title="所属项目" className="flex-shrink-0 cursor-help">
               <FolderKanban className="w-4 h-4 text-gray-500" />
             </span>
             <select
@@ -324,10 +320,16 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
 
           {/* 开始时间 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <span title="开始时间" className="flex-shrink-0">
+            <span title="开始时间" className="flex-shrink-0 cursor-help">
               <Clock className="w-4 h-4 text-gray-500" />
             </span>
             <div className="flex gap-2 flex-1 items-center">
+              <Input
+                type="datetime-local"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="flex-1 text-xs border-2 hover:border-gray-300 transition-all duration-200"
+              />
               {getQuickTimeOptions().map((option) => (
                 <button
                   key={option.label}
@@ -337,21 +339,21 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
                   {option.label}
                 </button>
               ))}
-              <Input
-                type="datetime-local"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="flex-1 text-xs border-2 hover:border-gray-300 transition-all duration-200"
-              />
             </div>
           </div>
 
           {/* 截止时间 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <span title="截止时间" className="flex-shrink-0">
+            <span title="截止时间" className="flex-shrink-0 cursor-help">
               <Calendar className="w-4 h-4 text-gray-500" />
             </span>
             <div className="flex gap-2 flex-1 items-center">
+              <Input
+                type="datetime-local"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="flex-1 text-xs border-2 hover:border-gray-300 transition-all duration-200"
+              />
               {getQuickTimeOptions().map((option) => (
                 <button
                   key={option.label}
@@ -361,18 +363,12 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
                   {option.label}
                 </button>
               ))}
-              <Input
-                type="datetime-local"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="flex-1 text-xs border-2 hover:border-gray-300 transition-all duration-200"
-              />
             </div>
           </div>
 
           {/* 标签 - 图标 + 选项 */}
           <div className="flex items-start gap-3">
-            <span title="标签" className="flex-shrink-0 mt-1">
+            <span title="标签" className="flex-shrink-0 mt-1 cursor-help">
               <TagIcon className="w-4 h-4 text-gray-500" />
             </span>
             <div className="flex-1">
@@ -454,6 +450,12 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
           <textarea
             value={description}
             onChange={handleDescriptionChange}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                handleSave()
+              }
+            }}
             className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[150px] resize-none transition-all duration-200 hover:border-gray-300"
             placeholder="添加任务描述... (输入 '#标签名 ' 后加空格自动提取标签，按 Cmd/Ctrl+Enter 保存)"
           />
