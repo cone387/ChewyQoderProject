@@ -1,9 +1,10 @@
 import { Task } from '@/types'
-import { CheckCircle2, Circle, Calendar, Edit, Trash2 } from 'lucide-react'
+import { CheckCircle2, Circle, Calendar, Edit, Trash2, GripVertical } from 'lucide-react'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale/zh-CN'
 import { cn } from '@/utils/cn'
 import { useState } from 'react'
+import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities'
 
 interface TaskItemProps {
   task: Task
@@ -11,6 +12,7 @@ interface TaskItemProps {
   onClick?: (task: Task) => void
   onEdit?: (task: Task) => void
   onDelete?: (task: Task) => void
+  dragHandleProps?: SyntheticListenerMap
 }
 
 const TaskItem = ({ 
@@ -18,7 +20,8 @@ const TaskItem = ({
   onToggleComplete, 
   onClick,
   onEdit,
-  onDelete 
+  onDelete,
+  dragHandleProps
 }: TaskItemProps) => {
   const [showActions, setShowActions] = useState(false)
 
@@ -55,6 +58,16 @@ const TaskItem = ({
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
+      {/* 拖动手柄 */}
+      {dragHandleProps && (
+        <div
+          {...dragHandleProps}
+          className="flex-shrink-0 cursor-move text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <GripVertical className="w-4 h-4" />
+        </div>
+      )}
+
       {/* 完成状态按钮 */}
       <button
         onClick={(e) => {

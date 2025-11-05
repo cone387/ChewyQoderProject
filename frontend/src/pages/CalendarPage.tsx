@@ -20,6 +20,7 @@ const CalendarPage = () => {
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false)
   const [newTaskDate, setNewTaskDate] = useState<Date | null>(null)
   const [newTaskTitle, setNewTaskTitle] = useState('')
+  const [currentDate, setCurrentDate] = useState(new Date())
 
   useEffect(() => {
     loadTasks()
@@ -134,6 +135,7 @@ const CalendarPage = () => {
     const calendarApi = calendarRef.current?.getApi()
     if (calendarApi) {
       calendarApi.prev()
+      setCurrentDate(calendarApi.getDate())
     }
   }
 
@@ -141,6 +143,7 @@ const CalendarPage = () => {
     const calendarApi = calendarRef.current?.getApi()
     if (calendarApi) {
       calendarApi.next()
+      setCurrentDate(calendarApi.getDate())
     }
   }
 
@@ -148,16 +151,12 @@ const CalendarPage = () => {
     const calendarApi = calendarRef.current?.getApi()
     if (calendarApi) {
       calendarApi.today()
+      setCurrentDate(new Date())
     }
   }
 
   const getCurrentDate = () => {
-    const calendarApi = calendarRef.current?.getApi()
-    if (calendarApi) {
-      const date = calendarApi.getDate()
-      return `${date.getFullYear()}年${date.getMonth() + 1}月`
-    }
-    return ''
+    return `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月`
   }
 
   return (
@@ -206,6 +205,7 @@ const CalendarPage = () => {
             events={events}
             dateClick={handleDateClick}
             eventClick={handleEventClick}
+            datesSet={(dateInfo) => setCurrentDate(dateInfo.start)}
             height="100%"
             editable={true}
             selectable={true}

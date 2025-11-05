@@ -28,8 +28,8 @@ const SortableTaskItem = (props: SortableTaskItemProps) => {
   }
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <TaskItem {...props} />
+    <div ref={setNodeRef} style={style} {...attributes}>
+      <TaskItem {...props} dragHandleProps={listeners} />
     </div>
   )
 }
