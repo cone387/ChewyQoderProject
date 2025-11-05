@@ -105,16 +105,6 @@ export default function TasksPage() {
     }
   }
 
-  const handleToggleStar = async (task: Task) => {
-    try {
-      const updated = await taskService.updateTask(task.id, { is_starred: !task.is_starred })
-      setTasks(tasks.map(t => t.id === task.id ? updated : t))
-      toast.success(updated.is_starred ? '已加星标' : '已取消星标')
-    } catch (error) {
-      toast.error('更新任务失败')
-    }
-  }
-
   const handleUpdateTask = async (taskId: number, updates: Partial<Task>) => {
     try {
       const updated = await taskService.updateTask(taskId, updates)
@@ -351,7 +341,6 @@ export default function TasksPage() {
                     key={task.id}
                     task={task}
                     onToggleComplete={handleToggleComplete}
-                    onToggleStar={handleToggleStar}
                     onClick={setSelectedTask}
                     onEdit={(task) => setSelectedTask(task)}
                     onDelete={() => handleDeleteTask(task.id)}

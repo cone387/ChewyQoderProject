@@ -17,6 +17,18 @@ const TagsPage = () => {
 
   useEffect(() => {
     loadTags()
+    
+    // 页面可见性监听
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadTags()
+      }
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [])
 
   const loadTags = async () => {
