@@ -381,7 +381,7 @@ export default function TasksPage() {
           </div>
 
           {/* 任务列表 */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-h-[calc(100vh-400px)]">
             {filteredTasks.length === 0 ? (
               <div className="p-12 text-center text-gray-500">
                 <p className="text-lg">暂无任务</p>
@@ -397,7 +397,7 @@ export default function TasksPage() {
                   items={filteredTasks.map(t => t.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="p-4 space-y-2">
+                  <div className="p-4 space-y-2 overflow-y-auto max-h-[calc(100vh-400px)]">
                     {filteredTasks.map((task) => (
                       <SortableTaskItem
                         key={task.id}

@@ -189,7 +189,7 @@ export default function DashboardPage() {
               <p>暂无任务,点击上方按钮创建新任务</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
               {todayTasks.map((task) => (
                 <TaskItem 
                   key={task.id} 
@@ -211,7 +211,7 @@ export default function DashboardPage() {
               <Calendar className="w-5 h-5 text-red-500" />
               即将到期
             </h2>
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
               {dueSoonTasks.map((task) => (
                 <TaskItem 
                   key={task.id} 
