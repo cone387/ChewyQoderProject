@@ -60,6 +60,7 @@ class Task(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True, verbose_name='完成时间')
     order = models.IntegerField(default=0, verbose_name='排序')
     is_starred = models.BooleanField(default=False, verbose_name='是否标星')
+    is_deleted = models.BooleanField(default=False, verbose_name='是否删除')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 

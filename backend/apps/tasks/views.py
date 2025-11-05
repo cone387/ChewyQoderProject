@@ -18,7 +18,14 @@ class TaskViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'due_date', 'order', 'priority']
 
     def get_queryset(self):
-        return Task.objects.filter(user=self.request.user)
+        queryset = Task.objects.filter(user=self.request.user)
+        
+        # 默认不显示已删除的任务
+        include_deleted = self.request.query_params.get('include_deleted', 'false')
+        if include_deleted.lower() != 'true':
+            queryset = queryset.filter(is_deleted=False)
+        
+        return queryset
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -134,3 +141,96 @@ class TaskViewSet(viewsets.ModelViewSet):
             'project_distribution': project_distribution,
             'tag_stats': tag_stats
         })
+    
+    @action(detail=False, methods=['get'])
+    def system(self, request):
+        """获取系统清单任务"""
+        system_type = request.query_params.get('type', 'inbox')
+        queryset = Task.objects.filter(user=request.user)
+        
+        if system_type == 'inbox':
+            # 收集箱: 未分配项目且未完成的任务
+            queryset = queryset.filter(
+                project__isnull=True,
+                is_deleted=False
+            ).exclude(status='completed')
+        elif system_type == 'completed':
+            # 已完成: 所有已完成的任务
+            queryset = queryset.filter(
+                status='completed',
+                is_deleted=False
+            )
+        elif system_type == 'trash':
+            # 垃圾筒: 已删除的任务
+            queryset = queryset.filter(is_deleted=True)
+        else:
+            return Response(
+                {'error': 'Invalid system type'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'results': serializer.data,
+            'count': queryset.count()
+        })
+    
+    @action(detail=False, methods=['post'])
+    def batch_update(self, request):
+        """批量更新任务"""
+        task_ids = request.data.get('task_ids', [])
+        updates = request.data.get('updates', {})
+        
+        if not task_ids:
+            return Response(
+                {'error': 'task_ids is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 获取当前用户的任务
+        tasks = Task.objects.filter(
+            id__in=task_ids,
+            user=request.user
+        )
+        
+        # 批量更新
+        updated_count = tasks.update(**updates)
+        
+        # 如果是完成操作，更新完成时间
+        if updates.get('status') == 'completed':
+            tasks.update(completed_at=timezone.now())
+        
+        # 返回更新后的任务
+        updated_tasks = Task.objects.filter(
+            id__in=task_ids,
+            user=request.user
+        )
+        serializer = self.get_serializer(updated_tasks, many=True)
+        
+        return Response({
+            'updated_count': updated_count,
+            'tasks': serializer.data
+        })
+    
+    def destroy(self, request, *args, **kwargs):
+        """软删除任务（移入垃圾筒）"""
+        task = self.get_object()
+        task.is_deleted = True
+        task.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
+    @action(detail=True, methods=['post'])
+    def restore(self, request, pk=None):
+        """恢复已删除的任务"""
+        task = self.get_object()
+        task.is_deleted = False
+        task.save()
+        serializer = self.get_serializer(task)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['delete'])
+    def permanent_delete(self, request, pk=None):
+        """永久删除任务"""
+        task = self.get_object()
+        task.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

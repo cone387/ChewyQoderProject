@@ -10,8 +10,8 @@ interface PaginatedResponse<T> {
 }
 
 export const projectService = {
-  getProjects: async (): Promise<Project[]> => {
-    const response = await apiClient.get<PaginatedResponse<Project>>('/projects/')
+  getProjects: async (params?: Record<string, any>): Promise<Project[]> => {
+    const response = await apiClient.get<PaginatedResponse<Project>>('/projects/', { params })
     // 如果是分页响应,返回 results 数组;否则假定它已经是数组
     return response.data.results || (response.data as any)
   },
@@ -37,6 +37,11 @@ export const projectService = {
 
   toggleFavorite: async (id: number): Promise<Project> => {
     const response = await apiClient.post<Project>(`/projects/${id}/toggle_favorite/`)
+    return response.data
+  },
+
+  togglePin: async (id: number): Promise<Project> => {
+    const response = await apiClient.post<Project>(`/projects/${id}/toggle_pin/`)
     return response.data
   },
 }

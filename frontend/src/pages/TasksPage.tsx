@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, Filter, FolderKanban, Tag as TagIcon, X } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
+import { Plus, Search, ChevronDown, ChevronUp } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
-import Modal from '@/components/ui/Modal'
 import SortableTaskItem from '@/components/task/SortableTaskItem'
 import TaskDetail from '@/components/task/TaskDetail'
-import { Task, Project, Tag } from '@/types'
+import { Task, Project, Tag, SystemListType } from '@/types'
 import { taskService } from '@/services/task'
 import { projectService } from '@/services/project'
 import { tagService } from '@/services/tag'
@@ -27,18 +27,22 @@ import {
 } from '@dnd-kit/sortable'
 
 export default function TasksPage() {
+  const location = useLocation()
   const [tasks, setTasks] = useState<Task[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [tags, setTags] = useState<Tag[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
-  const [newTaskTitle, setNewTaskTitle] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterStatus, setFilterStatus] = useState<'all' | 'todo' | 'in_progress' | 'completed'>('all')
-  const [filterProject, setFilterProject] = useState<number | null>(null)
-  const [filterTags, setFilterTags] = useState<number[]>([])
-  const [showTagDropdown, setShowTagDropdown] = useState(false)
+  const [currentView, setCurrentView] = useState<'inbox' | 'completed' | 'trash' | number>('inbox')
+  const [currentProject, setCurrentProject] = useState<Project | null>(null)
+  
+  // 分组展开状态，从 localStorage 读取
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem('expandedGroups')
+    return saved ? JSON.parse(saved) : { starred: true, untagged: true, completed: false }
+  })
 
   // 拖动传感器
   const sensors = useSensors(
@@ -49,27 +53,64 @@ export default function TasksPage() {
   )
 
   useEffect(() => {
-    loadTasks()
     loadProjects()
     loadTags()
   }, [])
 
-  const loadTasks = async () => {
+  useEffect(() => {
+    // 从 location.state 获取视图参数
+    const state = location.state as { view?: 'inbox' | 'completed' | 'trash' | number } | null
+    if (state?.view !== undefined) {
+      setCurrentView(state.view)
+    }
+  }, [location])
+
+  useEffect(() => {
+    if (currentView) {
+      loadTasksForView()
+      if (typeof currentView === 'number') {
+        loadProjectInfo(currentView)
+      } else {
+        setCurrentProject(null)
+      }
+    }
+  }, [currentView])
+
+  useEffect(() => {
+    // 保存分组展开状态到 localStorage
+    localStorage.setItem('expandedGroups', JSON.stringify(expandedGroups))
+  }, [expandedGroups])
+
+  const loadTasksForView = async () => {
     try {
       setIsLoading(true)
-      const data = await taskService.getTasks()
-      // 确保 data 是数组
-      if (Array.isArray(data)) {
-        setTasks(data)
-      } else {
-        setTasks([])
+      let data: Task[] = []
+
+      if (typeof currentView === 'number') {
+        // 加载指定项目的任务
+        data = await taskService.getTasks({ project: currentView })
+      } else if (['inbox', 'completed', 'trash'].includes(currentView)) {
+        // 加载系统清单
+        const response = await taskService.getSystemList(currentView as SystemListType)
+        data = response.results
       }
+
+      setTasks(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('加载任务失败:', error)
       toast.error('加载任务失败')
-      setTasks([]) // 出错时设置为空数组
+      setTasks([])
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadProjectInfo = async (projectId: number) => {
+    try {
+      const project = await projectService.getProject(projectId)
+      setCurrentProject(project)
+    } catch (error) {
+      console.error('加载项目信息失败:', error)
     }
   }
 
@@ -95,25 +136,36 @@ export default function TasksPage() {
     }
   }
 
-  const handleCreateTask = async () => {
-    if (!newTaskTitle.trim()) {
-      toast.error('请输入任务标题')
-      return
-    }
-
+  const handleCreateTask = async (taskData: Partial<Task>) => {
     try {
       const newTask = await taskService.createTask({
-        title: newTaskTitle,
-        status: 'todo',
-        priority: 'none',
+        ...taskData,
+        project: typeof currentView === 'number' ? currentView : undefined,
       })
       setTasks([newTask, ...tasks])
-      setNewTaskTitle('')
       setIsModalOpen(false)
       toast.success('任务创建成功')
     } catch (error) {
       console.error('创建任务失败:', error)
       toast.error('创建任务失败')
+    }
+  }
+
+  const handleToggleComplete = async (task: Task) => {
+    try {
+      const newStatus = task.status === 'completed' ? 'todo' : 'completed'
+      const updated = await taskService.updateTask(task.id, { status: newStatus })
+      
+      if (newStatus === 'completed' && currentView !== 'completed') {
+        // 如果不在已完成视图，从列表中移除
+        setTasks(tasks.filter(t => t.id !== task.id))
+      } else {
+        setTasks(tasks.map(t => t.id === task.id ? updated : t))
+      }
+      
+      toast.success(newStatus === 'completed' ? '任务已完成' : '任务标记为未完成')
+    } catch (error) {
+      toast.error('更新任务失败')
     }
   }
 
@@ -133,61 +185,60 @@ export default function TasksPage() {
       const updated = await taskService.updateTask(taskId, updates)
       setTasks(tasks.map(t => t.id === taskId ? updated : t))
       toast.success('任务更新成功')
+      
+      // 如果状态变为已完成，且当前不在“已完成”视图，则从列表中移除
+      if (updates.status === 'completed' && currentView !== 'completed') {
+        setTasks(tasks.filter(t => t.id !== taskId))
+      }
     } catch (error) {
       toast.error('更新任务失败')
     }
   }
 
   const handleDeleteTask = async (taskId: number) => {
-    if (!confirm('确定要删除这个任务吗?')) return
-
     try {
       await taskService.deleteTask(taskId)
       setTasks(tasks.filter(t => t.id !== taskId))
       setSelectedTask(null)
-      toast.success('任务已删除')
+      toast.success('任务已移入垃圾筒')
     } catch (error) {
       toast.error('删除任务失败')
     }
   }
 
-  const toggleTagFilter = (tagId: number) => {
-    if (filterTags.includes(tagId)) {
-      setFilterTags(filterTags.filter(id => id !== tagId))
-    } else {
-      setFilterTags([...filterTags, tagId])
-    }
+  const toggleGroupExpanded = (group: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [group]: !prev[group]
+    }))
   }
 
-  const clearTagFilters = () => {
-    setFilterTags([])
-    setShowTagDropdown(false)
-  }
+  // 搜索筛选
+  const searchedTasks = tasks.filter(task => 
+    task.title.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
-  // 筛选和搜索
-  const filteredTasks = tasks.filter(task => {
-    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = filterStatus === 'all' || task.status === filterStatus
-    const matchesProject = !filterProject || (
-      task.project && typeof task.project === 'object' ? task.project.id === filterProject : task.project === filterProject
-    )
-    const matchesTags = filterTags.length === 0 || (
-      task.tags && Array.isArray(task.tags) && filterTags.some(tagId => 
-        task.tags?.some(t => typeof t === 'object' ? t.id === tagId : t === tagId)
-      )
-    )
-    return matchesSearch && matchesStatus && matchesProject && matchesTags
-  })
+  // 任务分组
+  const groupedTasks = {
+    starred: searchedTasks.filter(t => t.is_starred && t.status !== 'completed'),
+    untagged: searchedTasks.filter(t => 
+      (!t.tags || (Array.isArray(t.tags) && t.tags.length === 0)) && 
+      !t.is_starred && 
+      t.status !== 'completed'
+    ),
+    completed: searchedTasks.filter(t => t.status === 'completed')
+  }
 
   // 拖动结束处理
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
 
     if (over && active.id !== over.id) {
-      const oldIndex = filteredTasks.findIndex(task => task.id === active.id)
-      const newIndex = filteredTasks.findIndex(task => task.id === over.id)
+      const allTasks = searchedTasks
+      const oldIndex = allTasks.findIndex(task => task.id === active.id)
+      const newIndex = allTasks.findIndex(task => task.id === over.id)
 
-      const newTasks = arrayMove(filteredTasks, oldIndex, newIndex)
+      const newTasks = arrayMove(allTasks, oldIndex, newIndex)
       
       // 更新本地状态
       setTasks(newTasks)
@@ -204,9 +255,16 @@ export default function TasksPage() {
         console.error('保存排序失败:', error)
         toast.error('保存排序失败')
         // 恢复原来的顺序
-        loadTasks()
+        loadTasksForView()
       }
     }
+  }
+
+  const getViewTitle = () => {
+    if (currentView === 'inbox') return '收集箱'
+    if (currentView === 'completed') return '已完成'
+    if (currentView === 'trash') return '垃圾筒'
+    return currentProject?.name || '任务列表'
   }
 
   if (isLoading) {
@@ -221,198 +279,171 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="h-full flex bg-gray-50">
-      {/* 主区域 */}
-      <div className="flex-1 overflow-auto">
-        <div className="p-8">
-          {/* 头部 */}
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h1 className="text-3xl font-bold text-gray-900">任务列表</h1>
-              <Button 
-                variant="primary"
-                onClick={() => setIsModalOpen(true)}
-                className="flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                新建任务
-              </Button>
+    <div className="h-full overflow-auto bg-gray-50">
+      <div className="p-8">
+        {/* 头部 */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">{getViewTitle()}</h1>
+              {currentProject && (
+                <p className="text-sm text-gray-500 mt-1">
+                  {currentProject.uncompleted_count} 个未完成任务 · {currentProject.completed_count} 个已完成
+                </p>
+              )}
             </div>
+            <Button 
+              variant="primary"
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              新建任务
+            </Button>
+          </div>
 
-            {/* 搜索和筛选 */}
-            <div className="flex flex-wrap gap-3">
-              <div className="flex-1 min-w-[200px] relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder="搜索任务..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+          {/* 搜索 */}
+          <div className="flex-1 max-w-md relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="搜索任务..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+
+        {/* 任务分组列表 */}
+        <div className="space-y-6">
+          {/* 已置顶分组 */}
+          {groupedTasks.starred.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <button
+                onClick={() => toggleGroupExpanded('starred')}
+                className="w-full flex items-center justify-between px-6 py-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold text-gray-700">⭐ 已置顶</span>
+                  <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200 text-gray-600">
+                    {groupedTasks.starred.length}
+                  </span>
+                </div>
+                {expandedGroups.starred ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
+              </button>
               
-              {/* 项目筛选 */}
-              <select
-                value={filterProject || ''}
-                onChange={(e) => setFilterProject(e.target.value ? Number(e.target.value) : null)}
-                className="px-4 py-2 border border-gray-200 rounded-xl text-sm bg-white hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">📁 所有项目</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-
-              {/* 标签筛选 */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowTagDropdown(!showTagDropdown)}
-                  className="px-4 py-2 border border-gray-200 rounded-xl text-sm bg-white hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-2"
+              {expandedGroups.starred && (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
                 >
-                  <TagIcon className="w-4 h-4" />
-                  {filterTags.length > 0 ? `已选 ${filterTags.length} 个标签` : '🏷️ 所有标签'}
-                </button>
-
-                {/* 标签下拉框 */}
-                {showTagDropdown && (
-                  <div className="absolute top-full left-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-10 max-h-80 overflow-y-auto">
-                    <div className="p-2 border-b border-gray-100 flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">选择标签</span>
-                      {filterTags.length > 0 && (
-                        <button
-                          onClick={clearTagFilters}
-                          className="text-xs text-blue-600 hover:text-blue-700"
-                        >
-                          清空
-                        </button>
-                      )}
+                  <SortableContext
+                    items={groupedTasks.starred.map(t => t.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="p-4 space-y-2">
+                      {groupedTasks.starred.map((task) => (
+                        <SortableTaskItem
+                          key={task.id}
+                          task={task}
+                          onToggleComplete={handleToggleComplete}
+                          onClick={setSelectedTask}
+                          onEdit={(task: Task) => setSelectedTask(task)}
+                          onDelete={() => handleDeleteTask(task.id)}
+                        />
+                      ))}
                     </div>
-                    <div className="p-2 space-y-1">
-                      {tags.length === 0 ? (
-                        <div className="p-3 text-center text-sm text-gray-500">
-                          暂无标签
-                        </div>
-                      ) : (
-                        tags.map((tag) => (
-                          <label
-                            key={tag.id}
-                            className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={filterTags.includes(tag.id)}
-                              onChange={() => toggleTagFilter(tag.id)}
-                              className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                            />
-                            <span className="text-sm text-gray-700">{tag.name}</span>
-                          </label>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                {(['all', 'todo', 'in_progress', 'completed'] as const).map((status) => {
-                  const counts = {
-                    all: tasks.length,
-                    todo: tasks.filter(t => t.status === 'todo').length,
-                    in_progress: tasks.filter(t => t.status === 'in_progress').length,
-                    completed: tasks.filter(t => t.status === 'completed').length,
-                  }
-                  
-                  return (
-                    <button
-                      key={status}
-                      onClick={() => setFilterStatus(status)}
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                        filterStatus === status
-                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md shadow-blue-200'
-                          : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                      }`}
-                    >
-                      {status === 'all' ? '全部' : status === 'todo' ? '待办' : status === 'in_progress' ? '进行中' : '已完成'}
-                      <span className={`px-2 py-0.5 text-xs rounded-full ${
-                        filterStatus === status
-                          ? 'bg-white/20'
-                          : 'bg-gray-100'
-                      }`}>
-                        {counts[status]}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
+                  </SortableContext>
+                </DndContext>
+              )}
             </div>
+          )}
 
-            {/* 已选标签展示 */}
-            {filterTags.length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap mt-3">
-                <span className="text-sm text-gray-600">已选标签:</span>
-                {filterTags.map(tagId => {
-                  const tag = tags.find(t => t.id === tagId)
-                  if (!tag) return null
-                  return (
-                    <span
-                      key={tagId}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm"
-                    >
-                      {tag.name}
-                      <button
-                        onClick={() => toggleTagFilter(tagId)}
-                        className="hover:bg-purple-200 rounded-full p-0.5 transition-colors"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  )
-                })}
-                <button
-                  onClick={clearTagFilters}
-                  className="text-sm text-blue-600 hover:text-blue-700 underline"
-                >
-                  清空所有
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* 任务列表 */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-h-[calc(100vh-400px)]">
-            {filteredTasks.length === 0 ? (
-              <div className="p-12 text-center text-gray-500">
-                <p className="text-lg">暂无任务</p>
-                <p className="text-sm mt-2">点击上方按钮创建新任务</p>
-              </div>
-            ) : (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
+          {/* 未分类分组 */}
+          {groupedTasks.untagged.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <button
+                onClick={() => toggleGroupExpanded('untagged')}
+                className="w-full flex items-center justify-between px-6 py-4 bg-gray-50 hover:bg-gray-100 transition-colors"
               >
-                <SortableContext
-                  items={filteredTasks.map(t => t.id)}
-                  strategy={verticalListSortingStrategy}
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold text-gray-700">📄 未分类</span>
+                  <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200 text-gray-600">
+                    {groupedTasks.untagged.length}
+                  </span>
+                </div>
+                {expandedGroups.untagged ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
+              </button>
+              
+              {expandedGroups.untagged && (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
                 >
-                  <div className="p-4 space-y-2 overflow-y-auto max-h-[calc(100vh-400px)]">
-                    {filteredTasks.map((task) => (
-                      <SortableTaskItem
-                        key={task.id}
-                        task={task}
-                        onToggleComplete={handleToggleComplete}
-                        onClick={setSelectedTask}
-                        onEdit={(task: Task) => setSelectedTask(task)}
-                        onDelete={() => handleDeleteTask(task.id)}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            )}
-          </div>
+                  <SortableContext
+                    items={groupedTasks.untagged.map(t => t.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="p-4 space-y-2">
+                      {groupedTasks.untagged.map((task) => (
+                        <SortableTaskItem
+                          key={task.id}
+                          task={task}
+                          onToggleComplete={handleToggleComplete}
+                          onClick={setSelectedTask}
+                          onEdit={(task: Task) => setSelectedTask(task)}
+                          onDelete={() => handleDeleteTask(task.id)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              )}
+            </div>
+          )}
+
+          {/* 已完成分组 */}
+          {groupedTasks.completed.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <button
+                onClick={() => toggleGroupExpanded('completed')}
+                className="w-full flex items-center justify-between px-6 py-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold text-gray-700">✅ 已完成</span>
+                  <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200 text-gray-600">
+                    {groupedTasks.completed.length}
+                  </span>
+                </div>
+                {expandedGroups.completed ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
+              </button>
+              
+              {expandedGroups.completed && (
+                <div className="p-4 space-y-2">
+                  {groupedTasks.completed.map((task) => (
+                    <SortableTaskItem
+                      key={task.id}
+                      task={task}
+                      onToggleComplete={handleToggleComplete}
+                      onClick={setSelectedTask}
+                      onEdit={(task: Task) => setSelectedTask(task)}
+                      onDelete={() => handleDeleteTask(task.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 空状态 */}
+          {searchedTasks.length === 0 && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center text-gray-500">
+              <p className="text-lg">暂无任务</p>
+              <p className="text-sm mt-2">点击上方按钮创建新任务</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -439,22 +470,10 @@ export default function TasksPage() {
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false)
-          setNewTaskTitle('')
         }}
         onUpdate={() => {}}
         onDelete={() => {}}
-        onCreate={async (taskData) => {
-          try {
-            const newTask = await taskService.createTask(taskData)
-            setTasks([newTask, ...tasks])
-            setNewTaskTitle('')
-            setIsModalOpen(false)
-            toast.success('任务创建成功')
-          } catch (error) {
-            console.error('创建任务失败:', error)
-            toast.error('创建任务失败')
-          }
-        }}
+        onCreate={handleCreateTask}
       />
     </div>
   )
