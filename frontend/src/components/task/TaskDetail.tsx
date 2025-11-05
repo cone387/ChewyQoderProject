@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Tag, Trash2 } from 'lucide-react'
-import { Task } from '@/types'
+import { Calendar, Tag, Trash2, FolderKanban } from 'lucide-react'
+import { Task, Project } from '@/types'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
 import Modal from '../ui/Modal'
 import { format } from 'date-fns'
 import { cn } from '@/utils/cn'
+import { projectService } from '@/services/project'
 
 interface TaskDetailProps {
   task: Task | null
@@ -21,6 +22,12 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
   const [priority, setPriority] = useState<Task['priority']>('none')
   const [dueDate, setDueDate] = useState('')
   const [status, setStatus] = useState<Task['status']>('todo')
+  const [projectId, setProjectId] = useState<number | null>(null)
+  const [projects, setProjects] = useState<Project[]>([])
+
+  useEffect(() => {
+    loadProjects()
+  }, [])
 
   useEffect(() => {
     if (task) {
@@ -29,8 +36,22 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
       setPriority(task.priority)
       setDueDate(task.due_date ? format(new Date(task.due_date), "yyyy-MM-dd'T'HH:mm") : '')
       setStatus(task.status)
+      setProjectId(
+        task.project && typeof task.project === 'object' ? task.project.id : task.project || null
+      )
     }
   }, [task])
+
+  const loadProjects = async () => {
+    try {
+      const data = await projectService.getProjects()
+      if (Array.isArray(data)) {
+        setProjects(data)
+      }
+    } catch (error) {
+      console.error('加载项目失败:', error)
+    }
+  }
 
   if (!task) return null
 
@@ -41,6 +62,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
       priority,
       due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
       status,
+      project: projectId || undefined,
     })
     onClose()
   }
@@ -117,6 +139,26 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete }: TaskDetailPro
               </button>
             ))}
           </div>
+        </div>
+
+        {/* 所属项目 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            <FolderKanban className="w-4 h-4 inline mr-1" />
+            所属项目
+          </label>
+          <select
+            value={projectId || ''}
+            onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : null)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+          >
+            <option value="">无项目</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* 截止日期 */}

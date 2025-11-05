@@ -49,8 +49,8 @@ const TaskItem = ({
   return (
     <div
       className={cn(
-        'group relative flex items-center gap-3 p-4 rounded-xl border transition-all duration-200',
-        'hover:shadow-md hover:border-blue-200 cursor-pointer',
+        'group relative flex items-center gap-3 p-4 rounded-xl border transition-all duration-150',
+        'hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5 cursor-pointer',
         task.status === 'completed' ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200',
         showActions && 'shadow-md border-blue-200'
       )}
@@ -89,11 +89,40 @@ const TaskItem = ({
           {/* 状态标签 */}
           {task.status !== 'completed' && (
             <span className={cn(
-              'px-2 py-0.5 text-xs font-medium rounded-full',
-              task.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+              'px-2 py-0.5 text-xs font-medium rounded-full border',
+              task.status === 'todo' && 'bg-gray-200 text-gray-800 border-gray-300',
+              task.status === 'in_progress' && 'bg-blue-100 text-blue-700 border-blue-200'
             )}>
               {statusLabels[task.status]}
             </span>
+          )}
+        </div>
+
+        {/* 项目和标签 */}
+        <div className="flex items-center gap-2 mb-1.5 text-xs">
+          {task.project && typeof task.project === 'object' && (
+            <div className="flex items-center gap-1 text-indigo-600">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+              </svg>
+              <span className="truncate max-w-[150px]">{task.project.name}</span>
+            </div>
+          )}
+          
+          {task.tags && Array.isArray(task.tags) && task.tags.length > 0 && typeof task.tags[0] === 'object' && (
+            <div className="flex items-center gap-1 flex-wrap">
+              {task.tags.slice(0, 3).map((tag) => (
+                <span
+                  key={typeof tag === 'object' ? tag.id : tag}
+                  className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded-md font-medium"
+                >
+                  {typeof tag === 'object' ? tag.name : tag}
+                </span>
+              ))}
+              {task.tags.length > 3 && (
+                <span className="text-gray-400">+{task.tags.length - 3}</span>
+              )}
+            </div>
           )}
         </div>
 
@@ -106,19 +135,24 @@ const TaskItem = ({
             </div>
           )}
           
-          {task.priority && task.priority !== 'none' && (
-            <span className={cn(
-              'px-2 py-0.5 text-xs font-medium rounded-md border',
-              priorityColors[task.priority]
-            )}>
-              {priorityLabels[task.priority]}
-            </span>
-          )}
-
-          {task.tags && task.tags.length > 0 && (
+          {task.priority && (
             <div className="flex items-center gap-1">
-              <Tag className="w-3 h-3" />
-              <span>{task.tags.length}</span>
+              <span className={cn(
+                'w-2.5 h-2.5 rounded-full border',
+                task.priority === 'urgent' && 'bg-red-500 border-red-600',
+                task.priority === 'high' && 'bg-orange-500 border-orange-600',
+                task.priority === 'medium' && 'bg-yellow-500 border-yellow-600',
+                task.priority === 'low' && 'bg-blue-500 border-blue-600',
+                task.priority === 'none' && 'bg-gray-300 border-gray-400'
+              )} />
+              <span className={cn(
+                'font-medium',
+                task.priority === 'urgent' && 'text-red-600',
+                task.priority === 'high' && 'text-orange-600',
+                task.priority === 'medium' && 'text-yellow-600',
+                task.priority === 'low' && 'text-blue-600',
+                task.priority === 'none' && 'text-gray-500'
+              )}>{priorityLabels[task.priority]}</span>
             </div>
           )}
 

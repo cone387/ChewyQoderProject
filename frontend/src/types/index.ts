@@ -25,9 +25,9 @@ export interface Task {
   title: string
   description?: string
   user: number
-  project?: number
+  project?: number | Project
   parent?: number
-  priority: 'none' | 'low' | 'medium' | 'high'
+  priority: 'none' | 'low' | 'medium' | 'high' | 'urgent'
   status: 'todo' | 'in_progress' | 'completed'
   due_date?: string
   completed_at?: string
@@ -35,7 +35,7 @@ export interface Task {
   repeat?: RepeatType
   order: number
   is_starred: boolean
-  tags?: number[]
+  tags?: number[] | Tag[]
   attachments?: Attachment[]
   comments?: Comment[]
   subtasks?: Task[]
