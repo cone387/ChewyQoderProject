@@ -1,5 +1,5 @@
 import { Task } from '@/types'
-import { CheckCircle2, Circle, Calendar, Edit, Trash2, GripVertical } from 'lucide-react'
+import { CheckCircle2, Circle, Calendar, Edit, Trash2, GripVertical, Star, Repeat, Paperclip, MessageCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale/zh-CN'
 import { cn } from '@/utils/cn'
@@ -13,6 +13,7 @@ interface TaskItemProps {
   onEdit?: (task: Task) => void
   onDelete?: (task: Task) => void
   dragHandleProps?: SyntheticListenerMap
+  visibleFields?: string[]
 }
 
 const TaskItem = ({ 
@@ -21,7 +22,8 @@ const TaskItem = ({
   onClick,
   onEdit,
   onDelete,
-  dragHandleProps
+  dragHandleProps,
+  visibleFields = ['status', 'priority', 'project', 'tags', 'due_date']
 }: TaskItemProps) => {
   const [showActions, setShowActions] = useState(false)
 
@@ -98,7 +100,7 @@ const TaskItem = ({
           </h4>
           
           {/* 状态标签 */}
-          {task.status !== 'completed' && (
+          {visibleFields.includes('status') && task.status !== 'completed' && (
             <span className={cn(
               'px-2 py-0.5 text-xs font-medium rounded-full border flex-shrink-0',
               task.status === 'todo' && 'bg-indigo-100 text-indigo-700 border-indigo-200',
@@ -109,7 +111,7 @@ const TaskItem = ({
           )}
 
           {/* 项目 */}
-          {task.project && typeof task.project === 'object' && (
+          {visibleFields.includes('project') && task.project && typeof task.project === 'object' && (
             <div className="flex items-center gap-1 text-indigo-600 flex-shrink-0">
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
@@ -119,7 +121,7 @@ const TaskItem = ({
           )}
           
           {/* 标签 */}
-          {task.tags && Array.isArray(task.tags) && task.tags.length > 0 && typeof task.tags[0] === 'object' && (
+          {visibleFields.includes('tags') && task.tags && Array.isArray(task.tags) && task.tags.length > 0 && typeof task.tags[0] === 'object' && (
             <>
               {task.tags.slice(0, 3).map((tag) => (
                 <span
@@ -138,7 +140,7 @@ const TaskItem = ({
 
         {/* 元数据 */}
         <div className="flex items-center gap-3 text-xs text-gray-500">
-          {task.due_date && (
+          {visibleFields.includes('due_date') && task.due_date && (
             <div className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
               <span>{format(new Date(task.due_date), 'MM-dd HH:mm', { locale: zhCN })}</span>
@@ -146,7 +148,7 @@ const TaskItem = ({
           )}
           
           {/* 只在优先级不是'none'时显示 */}
-          {task.priority && task.priority !== 'none' && (
+          {visibleFields.includes('priority') && task.priority && task.priority !== 'none' && (
             <div className="flex items-center gap-1">
               <span className={cn(
                 'w-2.5 h-2.5 rounded-full border',
@@ -165,10 +167,53 @@ const TaskItem = ({
             </div>
           )}
 
-          {task.subtasks_count > 0 && (
+          {visibleFields.includes('progress') && task.subtasks_count > 0 && (
             <span className="text-xs">
               {task.subtasks_count} 个子任务
             </span>
+          )}
+
+          {/* 星标 */}
+          {visibleFields.includes('is_starred') && task.is_starred && (
+            <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+          )}
+
+          {/* 重复 */}
+          {visibleFields.includes('repeat') && task.repeat && (
+            <div className="flex items-center gap-1">
+              <Repeat className="w-3 h-3" />
+              <span>{task.repeat}</span>
+            </div>
+          )}
+
+          {/* 附件 */}
+          {visibleFields.includes('attachments') && task.attachments && task.attachments.length > 0 && (
+            <div className="flex items-center gap-1">
+              <Paperclip className="w-3 h-3" />
+              <span>{task.attachments.length}</span>
+            </div>
+          )}
+
+          {/* 评论 */}
+          {visibleFields.includes('comments') && task.comments && task.comments.length > 0 && (
+            <div className="flex items-center gap-1">
+              <MessageCircle className="w-3 h-3" />
+              <span>{task.comments.length}</span>
+            </div>
+          )}
+
+          {/* 创建时间 */}
+          {visibleFields.includes('created_at') && (
+            <div className="flex items-center gap-1">
+              <span>创建: {format(new Date(task.created_at), 'MM-dd', { locale: zhCN })}</span>
+            </div>
+          )}
+
+          {/* 更新时间 */}
+          {visibleFields.includes('updated_at') && (
+            <div className="flex items-center gap-1">
+              <span>更新: {format(new Date(task.updated_at), 'MM-dd', { locale: zhCN })}</span>
+            </div>
           )}
         </div>
       </div>

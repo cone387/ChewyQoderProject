@@ -9,6 +9,7 @@ interface SortableTaskItemProps {
   onClick?: (task: Task) => void
   onEdit?: (task: Task) => void
   onDelete?: (task: Task) => void
+  visibleFields?: string[]
 }
 
 const SortableTaskItem = (props: SortableTaskItemProps) => {

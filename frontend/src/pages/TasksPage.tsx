@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { 
   Plus, Search, ChevronDown, ChevronUp, List, Columns3, GanttChart,
   Filter, ArrowUpDown, Group, Settings as SettingsIcon, X, Check, MoreHorizontal,
-  LayoutDashboard, Timer
+  LayoutDashboard, Timer, Eye, EyeOff, ChevronRight, GripVertical
 } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -168,6 +168,7 @@ export default function TasksPage() {
         setIsScopeDropdownOpen(false)
         setIsSortDropdownOpen(false)
         setIsGroupDropdownOpen(false)
+        setIsFieldConfigOpen(false)
       }
     }
     
@@ -786,13 +787,92 @@ export default function TasksPage() {
             </div>
 
             {/* 字段配置 */}
-            <button
-              onClick={() => setIsFieldConfigOpen(!isFieldConfigOpen)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <SettingsIcon className="w-4 h-4" />
-              字段配置
-            </button>
+            <div className="relative dropdown-container">
+              <button
+                onClick={() => setIsFieldConfigOpen(!isFieldConfigOpen)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <SettingsIcon className="w-4 h-4" />
+                字段配置
+              </button>
+              
+              {/* 下拉菜单 */}
+              {isFieldConfigOpen && (
+                <div className="absolute top-full left-0 mt-2 w-[360px] bg-white border border-gray-200 rounded-xl shadow-lg z-50">
+                  <div className="p-4">
+                    {/* 标题 */}
+                    <h3 className="text-sm font-semibold text-gray-900 mb-4">字段配置</h3>
+
+                    {/* 添加自定义字段 */}
+                    <button 
+                      onClick={() => {
+                        const fieldName = prompt('请输入自定义字段名称')
+                        if (fieldName) {
+                          // TODO: 实现添加自定义字段逻辑
+                          toast.success(`自定义字段"${fieldName}"已添加`)
+                        }
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-2.5 mb-3 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Plus className="w-4 h-4" />
+                        <span>添加自定义字段</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    </button>
+
+                    {/* 分割线 */}
+                    <div className="border-t border-gray-200 mb-3" />
+
+                    {/* 字段列表 - 基于Task模型的实际字段 */}
+                    <div className="space-y-0.5 max-h-[400px] overflow-y-auto">
+                      {[
+                        { value: 'status', label: '状态' },
+                        { value: 'priority', label: '优先级' },
+                        { value: 'project', label: '所属项目' },
+                        { value: 'tags', label: '标签' },
+                        { value: 'start_date', label: '开始时间' },
+                        { value: 'due_date', label: '截止时间' },
+                        { value: 'completed_at', label: '完成时间' },
+                        { value: 'reminder', label: '提醒时间' },
+                        { value: 'repeat', label: '重复' },
+                        { value: 'is_starred', label: '星标' },
+                        { value: 'subtasks_count', label: '子任务数' },
+                        { value: 'attachments', label: '附件' },
+                        { value: 'comments', label: '评论' },
+                        { value: 'created_at', label: '创建时间' },
+                        { value: 'updated_at', label: '更新时间' },
+                      ].map(field => {
+                        const isVisible = visibleFields.includes(field.value)
+                        return (
+                          <button
+                            key={field.value}
+                            onClick={() => {
+                              if (isVisible) {
+                                setVisibleFields(visibleFields.filter(f => f !== field.value))
+                              } else {
+                                setVisibleFields([...visibleFields, field.value])
+                              }
+                            }}
+                            className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors group"
+                          >
+                            <div className="flex items-center gap-2">
+                              <GripVertical className="w-4 h-4 text-gray-400 cursor-move" />
+                              <span>{field.label}</span>
+                            </div>
+                            {isVisible ? (
+                              <Eye className="w-4 h-4 text-gray-600" />
+                            ) : (
+                              <EyeOff className="w-4 h-4 text-gray-400" />
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -836,6 +916,7 @@ export default function TasksPage() {
                             onClick={setSelectedTask}
                             onEdit={(task: Task) => setSelectedTask(task)}
                             onDelete={() => handleDeleteTask(task.id)}
+                            visibleFields={visibleFields}
                           />
                         ))}
                       </div>
@@ -1121,81 +1202,6 @@ export default function TasksPage() {
             >
               清空筛选
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* 字段配置面板 */}
-      {isFieldConfigOpen && (
-        <div className="fixed right-0 top-0 bottom-0 w-80 bg-white border-l border-gray-200 shadow-xl z-50 overflow-y-auto">
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-900">字段配置</h3>
-              <button
-                onClick={() => setIsFieldConfigOpen(false)}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-
-            <p className="text-sm text-gray-600 mb-4">选择要在列表视图中显示的字段</p>
-
-            <div className="space-y-2">
-              {[
-                { value: 'title', label: '任务标题', disabled: true },
-                { value: 'status', label: '状态', disabled: false },
-                { value: 'priority', label: '优先级', disabled: false },
-                { value: 'project', label: '项目', disabled: false },
-                { value: 'tags', label: '标签', disabled: false },
-                { value: 'start_date', label: '开始时间', disabled: false },
-                { value: 'due_date', label: '截止时间', disabled: false },
-                { value: 'created_at', label: '创建时间', disabled: false },
-                { value: 'updated_at', label: '更新时间', disabled: false },
-              ].map(field => (
-                <label
-                  key={field.value}
-                  className={cn(
-                    'flex items-center gap-2 p-3 rounded-lg border transition-colors',
-                    field.disabled
-                      ? 'bg-gray-50 border-gray-200 cursor-not-allowed'
-                      : 'bg-white border-gray-200 hover:border-blue-300 cursor-pointer'
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={visibleFields.includes(field.value)}
-                    disabled={field.disabled}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setVisibleFields([...visibleFields, field.value])
-                      } else {
-                        setVisibleFields(visibleFields.filter(f => f !== field.value))
-                      }
-                    }}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
-                  />
-                  <span className={cn(
-                    'text-sm font-medium',
-                    field.disabled ? 'text-gray-500' : 'text-gray-700'
-                  )}>
-                    {field.label}
-                    {field.disabled && <span className="text-xs text-gray-400 ml-1">(必选)</span>}
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <button
-                onClick={() => {
-                  setVisibleFields(['title', 'status', 'priority', 'project', 'tags', 'due_date'])
-                }}
-                className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                重置为默认
-              </button>
-            </div>
           </div>
         </div>
       )}
