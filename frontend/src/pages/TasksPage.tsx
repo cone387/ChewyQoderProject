@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 import { 
   Plus, Search, ChevronDown, ChevronUp, List, Columns3, GanttChart,
-  Filter, ArrowUpDown, Group, Settings as SettingsIcon, X, Check
+  Filter, ArrowUpDown, Group, Settings as SettingsIcon, X, Check, MoreHorizontal,
+  LayoutDashboard, Timer
 } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -79,6 +80,7 @@ export default function TasksPage() {
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false)
   const [isScopeDropdownOpen, setIsScopeDropdownOpen] = useState(false)
   const [isFieldConfigOpen, setIsFieldConfigOpen] = useState(false)
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false)
   
   // 字段配置
   const [visibleFields, setVisibleFields] = useState<string[]>(() => {
@@ -143,6 +145,35 @@ export default function TasksPage() {
     // 保存分组展开状态到 localStorage
     localStorage.setItem('expandedGroups', JSON.stringify(expandedGroups))
   }, [expandedGroups])
+
+  // ESC键关闭搜索弹窗
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isSearchModalOpen) {
+        setIsSearchModalOpen(false)
+        setSearchQuery('')
+      }
+    }
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [isSearchModalOpen])
+
+  // 点击外部关闭下拉菜单
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      
+      // 关闭所有下拉菜单
+      if (!target.closest('.dropdown-container')) {
+        setIsScopeDropdownOpen(false)
+        setIsSortDropdownOpen(false)
+        setIsGroupDropdownOpen(false)
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const loadTasksForView = async () => {
     try {
@@ -524,238 +555,244 @@ export default function TasksPage() {
       <div className="p-8">
         {/* 头部 */}
         <div className="mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">{getViewTitle()}</h1>
-              {currentProject && (
-                <p className="text-sm text-gray-500 mt-1">
-                  {currentProject.uncompleted_count} 个未完成任务 · {currentProject.completed_count} 个已完成
-                </p>
-              )}
+          {/* 标题和更多菜单 */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-gray-900">{getViewTitle()}</h1>
+              <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
+                <MoreHorizontal className="w-5 h-5 text-gray-600" />
+              </button>
             </div>
+            <button
+              onClick={() => setIsSearchModalOpen(true)}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              title="搜索"
+            >
+              <Search className="w-5 h-5 text-gray-600" />
+            </button>
+          </div>
+
+          {/* 视图切换 */}
+          <div className="flex items-center gap-1 mb-4 border-b border-gray-200">
+            <button
+              onClick={() => setViewType('list')}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors relative',
+                viewType === 'list'
+                  ? 'text-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              )}
+            >
+              <List className="w-4 h-4" />
+              列表
+              {viewType === 'list' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+              )}
+            </button>
+            <button
+              onClick={() => setViewType('kanban')}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors relative',
+                viewType === 'kanban'
+                  ? 'text-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              )}
+            >
+              <Columns3 className="w-4 h-4" />
+              看板
+              {viewType === 'kanban' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+              )}
+            </button>
+            <button
+              onClick={() => setViewType('gantt')}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors relative',
+                viewType === 'gantt'
+                  ? 'text-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              )}
+            >
+              <GanttChart className="w-4 h-4" />
+              甘特图
+              {viewType === 'gantt' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+              )}
+            </button>
+            <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+              <LayoutDashboard className="w-4 h-4" />
+              仪表盘
+            </button>
+            <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+              <Timer className="w-4 h-4" />
+              动态
+            </button>
           </div>
 
           {/* 工具栏 */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-            <div className="flex items-center gap-3 flex-wrap">
-              {/* 视图切换 */}
-              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => setViewType('list')}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                    viewType === 'list'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  )}
-                >
-                  <List className="w-4 h-4" />
-                  列表
-                </button>
-                <button
-                  onClick={() => setViewType('kanban')}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                    viewType === 'kanban'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  )}
-                >
-                  <Columns3 className="w-4 h-4" />
-                  看板
-                </button>
-                <button
-                  onClick={() => setViewType('gantt')}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                    viewType === 'gantt'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  )}
-                >
-                  <GanttChart className="w-4 h-4" />
-                  甘特图
-                </button>
-              </div>
-
-              <div className="h-6 w-px bg-gray-300" />
-
-              {/* 新建任务 */}
-              <Button 
-                variant="primary"
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* 新建任务 */}
+            <div className="relative">
+              <button
                 onClick={() => setIsModalOpen(true)}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 新建任务
-              </Button>
-
-              <div className="h-6 w-px bg-gray-300" />
-
-              {/* 任务范围 */}
-              <div className="relative">
-                <button
-                  onClick={() => setIsScopeDropdownOpen(!isScopeDropdownOpen)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  {taskScope === 'all' && '全部任务'}
-                  {taskScope === 'my' && '我的任务'}
-                  {taskScope === 'uncompleted' && '未完成'}
-                  {taskScope === 'completed' && '已完成'}
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-                {isScopeDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
-                    <div className="p-1">
-                      {[
-                        { value: 'all', label: '全部任务' },
-                        { value: 'my', label: '我的任务' },
-                        { value: 'uncompleted', label: '未完成' },
-                        { value: 'completed', label: '已完成' },
-                      ].map(scope => (
-                        <button
-                          key={scope.value}
-                          onClick={() => {
-                            setTaskScope(scope.value as TaskScopeType)
-                            setIsScopeDropdownOpen(false)
-                          }}
-                          className={cn(
-                            'w-full text-left px-3 py-2 text-sm rounded-lg transition-colors',
-                            taskScope === scope.value
-                              ? 'bg-blue-50 text-blue-600 font-medium'
-                              : 'text-gray-700 hover:bg-gray-50'
-                          )}
-                        >
-                          {scope.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 筛选 */}
-              <button
-                onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors',
-                  filterCount > 0
-                    ? 'bg-blue-50 text-blue-600 border border-blue-200'
-                    : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
-                )}
-              >
-                <Filter className="w-4 h-4" />
-                筛选
-                {filterCount > 0 && (
-                  <span className="px-1.5 py-0.5 text-xs bg-blue-600 text-white rounded-full">
-                    {filterCount}
-                  </span>
-                )}
-              </button>
-
-              {/* 排序 */}
-              <div className="relative">
-                <button
-                  onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <ArrowUpDown className="w-4 h-4" />
-                  排序
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-                {isSortDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
-                    <div className="p-1">
-                      {[
-                        { value: 'manual', label: '拖拽自定义' },
-                        { value: 'due_date', label: '截止日期' },
-                        { value: 'priority', label: '优先级' },
-                        { value: 'created_at', label: '创建时间' },
-                        { value: 'updated_at', label: '更新时间' },
-                      ].map(sort => (
-                        <button
-                          key={sort.value}
-                          onClick={() => {
-                            setSortBy(sort.value as SortByType)
-                            setIsSortDropdownOpen(false)
-                          }}
-                          className={cn(
-                            'w-full text-left px-3 py-2 text-sm rounded-lg transition-colors',
-                            sortBy === sort.value
-                              ? 'bg-blue-50 text-blue-600 font-medium'
-                              : 'text-gray-700 hover:bg-gray-50'
-                          )}
-                        >
-                          {sort.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 分组 */}
-              <div className="relative">
-                <button
-                  onClick={() => setIsGroupDropdownOpen(!isGroupDropdownOpen)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <Group className="w-4 h-4" />
-                  分组
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-                {isGroupDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
-                    <div className="p-1">
-                      {[
-                        { value: 'status', label: '按状态分组' },
-                        { value: 'priority', label: '按优先级分组' },
-                        { value: 'project', label: '按项目分组' },
-                        { value: 'tag', label: '按标签分组' },
-                        { value: 'date', label: '按截止日期分组' },
-                        { value: 'none', label: '不分组' },
-                      ].map(group => (
-                        <button
-                          key={group.value}
-                          onClick={() => {
-                            setGroupBy(group.value as GroupByType)
-                            setIsGroupDropdownOpen(false)
-                          }}
-                          className={cn(
-                            'w-full text-left px-3 py-2 text-sm rounded-lg transition-colors',
-                            groupBy === group.value
-                              ? 'bg-blue-50 text-blue-600 font-medium'
-                              : 'text-gray-700 hover:bg-gray-50'
-                          )}
-                        >
-                          {group.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 字段配置 */}
-              <button
-                onClick={() => setIsFieldConfigOpen(!isFieldConfigOpen)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <SettingsIcon className="w-4 h-4" />
-                字段配置
+                <ChevronDown className="w-4 h-4" />
               </button>
             </div>
-          </div>
 
-          {/* 搜索 */}
-          <div className="flex-1 max-w-md relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="搜索任务..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+            {/* 全部任务 */}
+            <div className="relative dropdown-container">
+              <button
+                onClick={() => setIsScopeDropdownOpen(!isScopeDropdownOpen)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <List className="w-4 h-4" />
+                {taskScope === 'all' && '全部任务'}
+                {taskScope === 'my' && '我的任务'}
+                {taskScope === 'uncompleted' && '未完成'}
+                {taskScope === 'completed' && '已完成'}
+              </button>
+              {isScopeDropdownOpen && (
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
+                  <div className="p-1">
+                    {[
+                      { value: 'all', label: '全部任务' },
+                      { value: 'my', label: '我的任务' },
+                      { value: 'uncompleted', label: '未完成' },
+                      { value: 'completed', label: '已完成' },
+                    ].map(scope => (
+                      <button
+                        key={scope.value}
+                        onClick={() => {
+                          setTaskScope(scope.value as TaskScopeType)
+                          setIsScopeDropdownOpen(false)
+                        }}
+                        className={cn(
+                          'w-full text-left px-3 py-2 text-sm rounded-lg transition-colors',
+                          taskScope === scope.value
+                            ? 'bg-blue-50 text-blue-600 font-medium'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        )}
+                      >
+                        {scope.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 筛选 */}
+            <button
+              onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                filterCount > 0
+                  ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                  : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+              )}
+            >
+              <Filter className="w-4 h-4" />
+              筛选
+              {filterCount > 0 && (
+                <span className="px-1.5 py-0.5 text-xs bg-blue-600 text-white rounded-full">
+                  {filterCount}
+                </span>
+              )}
+            </button>
+
+            {/* 排序：拖拽自定义 */}
+            <div className="relative dropdown-container">
+              <button
+                onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <ArrowUpDown className="w-4 h-4" />
+                排序: {sortBy === 'manual' ? '拖拽自定义' : sortBy === 'due_date' ? '截止日期' : sortBy === 'priority' ? '优先级' : sortBy === 'created_at' ? '创建时间' : '更新时间'}
+              </button>
+              {isSortDropdownOpen && (
+                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
+                  <div className="p-1">
+                    {[
+                      { value: 'manual', label: '拖拽自定义' },
+                      { value: 'due_date', label: '截止日期' },
+                      { value: 'priority', label: '优先级' },
+                      { value: 'created_at', label: '创建时间' },
+                      { value: 'updated_at', label: '更新时间' },
+                    ].map(sort => (
+                      <button
+                        key={sort.value}
+                        onClick={() => {
+                          setSortBy(sort.value as SortByType)
+                          setIsSortDropdownOpen(false)
+                        }}
+                        className={cn(
+                          'w-full text-left px-3 py-2 text-sm rounded-lg transition-colors',
+                          sortBy === sort.value
+                            ? 'bg-blue-50 text-blue-600 font-medium'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        )}
+                      >
+                        {sort.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 分组：自定义分组 */}
+            <div className="relative dropdown-container">
+              <button
+                onClick={() => setIsGroupDropdownOpen(!isGroupDropdownOpen)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Group className="w-4 h-4" />
+                分组: {groupBy === 'status' ? '自定义分组' : groupBy === 'priority' ? '优先级' : groupBy === 'project' ? '项目' : groupBy === 'tag' ? '标签' : groupBy === 'date' ? '截止日期' : '不分组'}
+              </button>
+              {isGroupDropdownOpen && (
+                <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
+                  <div className="p-1">
+                    {[
+                      { value: 'status', label: '自定义分组' },
+                      { value: 'priority', label: '按优先级分组' },
+                      { value: 'project', label: '按项目分组' },
+                      { value: 'tag', label: '按标签分组' },
+                      { value: 'date', label: '按截止日期分组' },
+                      { value: 'none', label: '不分组' },
+                    ].map(group => (
+                      <button
+                        key={group.value}
+                        onClick={() => {
+                          setGroupBy(group.value as GroupByType)
+                          setIsGroupDropdownOpen(false)
+                        }}
+                        className={cn(
+                          'w-full text-left px-3 py-2 text-sm rounded-lg transition-colors',
+                          groupBy === group.value
+                            ? 'bg-blue-50 text-blue-600 font-medium'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        )}
+                      >
+                        {group.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 字段配置 */}
+            <button
+              onClick={() => setIsFieldConfigOpen(!isFieldConfigOpen)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <SettingsIcon className="w-4 h-4" />
+              字段配置
+            </button>
           </div>
         </div>
 
@@ -1158,6 +1195,72 @@ export default function TasksPage() {
               >
                 重置为默认
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 搜索弹窗 */}
+      {isSearchModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 pt-20">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4">
+            <div className="p-6">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="搜索任务..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  autoFocus
+                  className="w-full pl-12 pr-10 py-3 text-lg border-0 border-b-2 border-gray-200 focus:border-blue-500 focus:outline-none transition-colors"
+                />
+                <button
+                  onClick={() => {
+                    setIsSearchModalOpen(false)
+                    setSearchQuery('')
+                  }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {searchQuery && (
+                <div className="mt-4 max-h-96 overflow-y-auto">
+                  {filteredTasks.length > 0 ? (
+                    <div className="space-y-2">
+                      {filteredTasks.slice(0, 10).map(task => (
+                        <button
+                          key={task.id}
+                          onClick={() => {
+                            setSelectedTask(task)
+                            setIsSearchModalOpen(false)
+                          }}
+                          className="w-full text-left px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="font-medium text-gray-900">{task.title}</div>
+                          {task.project && typeof task.project === 'object' && (
+                            <div className="text-sm text-gray-500 mt-1">
+                              {task.project.name}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      未找到匹配的任务
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="text-xs text-gray-500">
+                  <span className="font-medium">Tip:</span> 按 ESC 键关闭
+                </div>
+              </div>
             </div>
           </div>
         </div>
