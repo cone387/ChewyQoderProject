@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { 
   Plus, Search, ChevronDown, ChevronUp, List, Columns3, GanttChart,
@@ -64,13 +64,19 @@ const SortableGroupHeader = ({
   groupName, 
   count, 
   isExpanded, 
-  onToggle 
+  onToggle,
+  onRename,
 }: { 
   groupName: string; 
   count: number; 
   isExpanded: boolean; 
   onToggle: () => void;
+  onRename?: (oldName: string, newName: string) => void;
 }) => {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editName, setEditName] = useState(groupName)
+  const inputRef = useRef<HTMLInputElement>(null)
+
   const {
     attributes,
     listeners,
@@ -83,11 +89,42 @@ const SortableGroupHeader = ({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+  }
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [isEditing])
+
+  const handleStartEdit = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (groupName === '默认分组' || !onRename) return
+    setIsEditing(true)
+    setEditName(groupName)
+  }
+
+  const handleSaveEdit = () => {
+    const newName = editName.trim()
+    if (newName && newName !== groupName && onRename) {
+      onRename(groupName, newName)
+    }
+    setIsEditing(false)
+    setEditName(groupName)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveEdit()
+    } else if (e.key === 'Escape') {
+      setIsEditing(false)
+      setEditName(groupName)
+    }
   }
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} style={style} className={isDragging ? 'opacity-50' : ''}>
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between px-6 py-4 bg-gray-50 hover:bg-gray-100 transition-colors group"
@@ -101,7 +138,30 @@ const SortableGroupHeader = ({
           >
             <GripVertical className="w-4 h-4" />
           </div>
-          <span className="text-sm font-semibold text-gray-700">{groupName}</span>
+          
+          {isEditing ? (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleKeyDown}
+              onClick={(e) => e.stopPropagation()}
+              className="text-sm font-semibold text-gray-700 bg-white border border-blue-500 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          ) : (
+            <span 
+              className={cn(
+                "text-sm font-semibold text-gray-700",
+                groupName !== '默认分组' && onRename && "cursor-text hover:text-blue-600"
+              )}
+              onClick={handleStartEdit}
+            >
+              {groupName}
+            </span>
+          )}
+          
           <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200 text-gray-600">
             {count}
           </span>
@@ -139,6 +199,7 @@ export default function TasksPage() {
   const [taskScope, setTaskScope] = useState<TaskScopeType>('all')
   const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([])
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null)
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
   
   // 筛选状态
   const [filterProjects, setFilterProjects] = useState<number[]>([])
@@ -161,6 +222,12 @@ export default function TasksPage() {
   const [customGroups, setCustomGroups] = useState<string[]>(() => {
     const saved = localStorage.getItem('task_custom_groups')
     return saved ? JSON.parse(saved) : []
+  })
+  
+  // 分组顺序（包括默认分组）
+  const [groupOrder, setGroupOrder] = useState<string[]>(() => {
+    const saved = localStorage.getItem('task_group_order')
+    return saved ? JSON.parse(saved) : ['默认分组']
   })
   
   // 字段配置
@@ -201,6 +268,24 @@ export default function TasksPage() {
   useEffect(() => {
     // 保存自定义分组
     localStorage.setItem('task_custom_groups', JSON.stringify(customGroups))
+  }, [customGroups])
+
+  useEffect(() => {
+    // 保存分组顺序
+    localStorage.setItem('task_group_order', JSON.stringify(groupOrder))
+  }, [groupOrder])
+
+  useEffect(() => {
+    // 同步customGroups到groupOrder
+    const newGroups = customGroups.filter(g => !groupOrder.includes(g))
+    if (newGroups.length > 0) {
+      setGroupOrder([...groupOrder, ...newGroups])
+    }
+    // 移除已删除的分组
+    const validGroups = groupOrder.filter(g => g === '默认分组' || customGroups.includes(g))
+    if (validGroups.length !== groupOrder.length) {
+      setGroupOrder(validGroups)
+    }
   }, [customGroups])
 
   useEffect(() => {
@@ -395,9 +480,39 @@ export default function TasksPage() {
       return
     }
     setCustomGroups([...customGroups, groupName])
+    // 添加到分组顺序中
+    setGroupOrder([...groupOrder, groupName])
     setIsNewGroupModalOpen(false)
     setNewGroupName('')
     toast.success(`分组"${groupName}"已创建`)
+  }
+
+  const handleRenameGroup = (oldName: string, newName: string) => {
+    if (oldName === newName) return
+    if (customGroups.includes(newName)) {
+      toast.error('分组名称已存在')
+      return
+    }
+    // 更新customGroups
+    setCustomGroups(customGroups.map(g => g === oldName ? newName : g))
+    // 更新groupOrder
+    setGroupOrder(groupOrder.map(g => g === oldName ? newName : g))
+    // 更新任务的custom_group
+    const tasksToUpdate = tasks.filter(t => (t as any).custom_group === oldName)
+    tasksToUpdate.forEach(async (task) => {
+      try {
+        await taskService.updateTask(task.id, { custom_group: newName } as any)
+      } catch (error) {
+        console.error('更新任务分组失败:', error)
+      }
+    })
+    // 更新本地状态
+    setTasks(tasks.map(t => 
+      (t as any).custom_group === oldName 
+        ? { ...t, custom_group: newName } as any 
+        : t
+    ))
+    toast.success(`分组已重命名为"${newName}"`)
   }
 
   // 搜索筛选
@@ -587,13 +702,18 @@ export default function TasksPage() {
 
   // 拖动开始处理
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveTaskId(event.active.id as number)
+    if (typeof event.active.id === 'string' && event.active.id.startsWith('group-header-')) {
+      setActiveGroupId(event.active.id)
+    } else {
+      setActiveTaskId(event.active.id as number)
+    }
   }
 
   // 拖动结束处理
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     setActiveTaskId(null)
+    setActiveGroupId(null)
 
     if (!over) return
 
@@ -605,16 +725,13 @@ export default function TasksPage() {
         : null
 
       if (overGroupName && activeGroupName !== overGroupName) {
-        // 构建完整的分组列表（包括默认分组）
-        const allGroups = [...customGroups, '默认分组']
-        const oldIndex = allGroups.indexOf(activeGroupName)
-        const newIndex = allGroups.indexOf(overGroupName)
+        // 使用groupOrder进行排序
+        const oldIndex = groupOrder.indexOf(activeGroupName)
+        const newIndex = groupOrder.indexOf(overGroupName)
 
         if (oldIndex !== -1 && newIndex !== -1) {
-          const newGroups = arrayMove(allGroups, oldIndex, newIndex)
-          // 移除默认分组，只保存自定义分组的顺序
-          const newCustomGroups = newGroups.filter(g => g !== '默认分组')
-          setCustomGroups(newCustomGroups)
+          const newGroupOrder = arrayMove(groupOrder, oldIndex, newIndex)
+          setGroupOrder(newGroupOrder)
           toast.success('分组顺序已更新')
         }
       }
@@ -1108,15 +1225,15 @@ export default function TasksPage() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            {/* 自定义分组模式：按customGroups顺序显示 */}
+            {/* 自定义分组模式：按groupOrder顺序显示 */}
             {groupBy === 'status' ? (
               <SortableContext
-                items={[...customGroups, '默认分组'].map(g => `group-header-${g}`)}
+                items={groupOrder.map(g => `group-header-${g}`)}
                 strategy={verticalListSortingStrategy}
               >
                 <div className="space-y-6">
-                  {/* 按customGroups顺序显示 */}
-                  {[...customGroups, '默认分组'].map(groupName => {
+                  {/* 按groupOrder顺序显示 */}
+                  {groupOrder.map(groupName => {
                     const groupTasks = groupedTasks[groupName] || []
                     return (
                       <GroupContainer key={groupName} groupName={groupName}>
@@ -1126,6 +1243,7 @@ export default function TasksPage() {
                             count={groupTasks.length}
                             isExpanded={expandedGroups[groupName] !== false}
                             onToggle={() => toggleGroupExpanded(groupName)}
+                            onRename={handleRenameGroup}
                           />
                           
                           {expandedGroups[groupName] !== false && (
@@ -1224,6 +1342,15 @@ export default function TasksPage() {
                 <div className="bg-white rounded-lg border-2 border-blue-500 p-4 shadow-lg opacity-80">
                   <div className="font-medium text-gray-900">
                     {tasks.find(t => t.id === activeTaskId)?.title}
+                  </div>
+                </div>
+              ) : activeGroupId ? (
+                <div className="bg-gray-50 rounded-lg border-2 border-blue-500 px-6 py-4 shadow-lg opacity-90">
+                  <div className="flex items-center gap-3">
+                    <GripVertical className="w-4 h-4 text-gray-600" />
+                    <span className="text-sm font-semibold text-gray-700">
+                      {activeGroupId.replace('group-header-', '')}
+                    </span>
                   </div>
                 </div>
               ) : null}
