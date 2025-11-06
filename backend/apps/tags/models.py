@@ -8,6 +8,7 @@ class Tag(models.Model):
     """
     name = models.CharField(max_length=50, verbose_name='标签名称')
     color = models.CharField(max_length=7, default='#10B981', verbose_name='颜色')
+    order = models.IntegerField(default=0, verbose_name='排序')
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -22,6 +23,7 @@ class Tag(models.Model):
         verbose_name = '标签'
         verbose_name_plural = verbose_name
         unique_together = ['name', 'user']
+        ordering = ['order', 'id']
 
     def __str__(self):
         return self.name

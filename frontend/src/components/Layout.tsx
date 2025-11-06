@@ -4,12 +4,14 @@ import { useAuthStore } from '@/store/auth'
 import { 
   Inbox, CheckCircle2, Trash2, Plus, ChevronLeft, ChevronRight, 
   ChevronDown, ChevronUp, MoreHorizontal, Calendar, Tag, FolderKanban, 
-  BarChart3, Settings, LogOut, Edit2, Star, StarOff, Folder, GripVertical
+  BarChart3, Settings, LogOut, Edit2, Star, StarOff, Folder, GripVertical,
+  MoreVertical, Pencil
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { projectService } from '@/services/project'
 import { taskService } from '@/services/task'
-import type { Project, SystemListType } from '@/types'
+import { tagService } from '@/services/tag'
+import type { Project, SystemListType, Tag as TagType } from '@/types'
 import toast from 'react-hot-toast'
 import {
   DndContext,
@@ -116,6 +118,142 @@ function SortableProjectItem({
   )
 }
 
+// 可排序的标签项组件
+function SortableTagItem({ 
+  tag,
+  isHovered,
+  onHover,
+  onHoverEnd,
+  onEdit,
+  onDelete
+}: { 
+  tag: TagType
+  isHovered: boolean
+  onHover: () => void
+  onHoverEnd: () => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: tag.id })
+
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  // 点击外部关闭菜单
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (isMenuOpen && !target.closest('.tag-menu-container')) {
+        setIsMenuOpen(false)
+      }
+    }
+    
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isMenuOpen])
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "relative",
+        isDragging && "opacity-50"
+      )}
+      onMouseEnter={onHover}
+      onMouseLeave={onHoverEnd}
+    >
+      <div className="w-full flex items-center gap-2 px-4 py-1.5 rounded-lg transition-all duration-200 hover:bg-gray-50">
+        {/* 拖动手柄 - 固定宽度避免抖动 */}
+        <div
+          {...attributes}
+          {...listeners}
+          className="flex-shrink-0 cursor-move transition-opacity text-gray-400 hover:text-gray-600"
+          style={{ 
+            width: '14px',
+            opacity: isHovered ? 1 : 0
+          }}
+        >
+          <GripVertical className="w-3.5 h-3.5" />
+        </div>
+        
+        {/* 标签名称 - 带背景色块 */}
+        <span 
+          className="px-2 py-0.5 rounded text-sm font-medium text-white flex-shrink-0"
+          style={{ backgroundColor: tag.color }}
+        >
+          {tag.name}
+        </span>
+        
+        <div className="flex-1" />
+        
+        {/* 操作菜单按钮 - 固定宽度避免抖动 */}
+        <div 
+          className="tag-menu-container relative flex-shrink-0" 
+          style={{ 
+            width: '20px',
+            opacity: isHovered ? 1 : 0
+          }}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsMenuOpen(!isMenuOpen)
+            }}
+            className="p-1 hover:bg-gray-200 rounded transition-colors"
+            title="更多操作"
+          >
+            <MoreVertical className="w-3.5 h-3.5 text-gray-600" />
+          </button>
+          
+          {/* 下拉菜单 */}
+          {isMenuOpen && (
+            <div className="absolute right-0 top-6 w-32 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+              <div className="p-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setIsMenuOpen(false)
+                    onEdit()
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md transition-colors text-left"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>编辑</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setIsMenuOpen(false)
+                    onDelete()
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors text-left"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>删除</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Layout() {
   const { isAuthenticated, logout, checkAuth } = useAuthStore()
   const navigate = useNavigate()
@@ -124,13 +262,16 @@ export default function Layout() {
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false)
   const [isPinnedExpanded, setIsPinnedExpanded] = useState(true)
   const [isNormalExpanded, setIsNormalExpanded] = useState(true)
+  const [isTagsExpanded, setIsTagsExpanded] = useState(true)
   const [isNewListMenuOpen, setIsNewListMenuOpen] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
+  const [tags, setTags] = useState<TagType[]>([])
   const [selectedView, setSelectedView] = useState<'inbox' | 'completed' | 'trash' | number>('inbox')
   const [inboxCount, setInboxCount] = useState(0)
   const [completedCount, setCompletedCount] = useState(0)
   const [trashCount, setTrashCount] = useState(0)
   const [hoveredProject, setHoveredProject] = useState<number | null>(null)
+  const [hoveredTag, setHoveredTag] = useState<number | null>(null)
   
   // 拖动传感器
   const sensors = useSensors(
@@ -144,6 +285,7 @@ export default function Layout() {
   useEffect(() => {
     checkAuth()
     loadProjects()
+    loadTags()
     loadSystemCounts()
   }, [])
 
@@ -264,6 +406,78 @@ export default function Layout() {
       toast.error('保存排序失败')
       // 恢复原始顺序
       await loadProjects()
+    }
+  }
+
+  const loadTags = async () => {
+    try {
+      const data = await tagService.getTags()
+      setTags(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('加载标签列表失败:', error)
+      setTags([])
+    }
+  }
+
+  const handleTagDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (!over || active.id === over.id) return
+
+    const oldIndex = tags.findIndex(t => t.id === active.id)
+    const newIndex = tags.findIndex(t => t.id === over.id)
+
+    if (oldIndex === -1 || newIndex === -1) return
+
+    // 本地更新顺序
+    const reorderedTags = arrayMove(tags, oldIndex, newIndex)
+    setTags(reorderedTags)
+
+    try {
+      // 批量更新后端
+      const updates = reorderedTags.map((tag, index) => ({
+        id: tag.id,
+        order: index
+      }))
+      
+      // 逐个更新
+      await Promise.all(
+        updates.map(update => 
+          tagService.updateTag(update.id, { order: update.order })
+        )
+      )
+      
+      toast.success('排序已保存')
+    } catch (error) {
+      console.error('保存排序失败:', error)
+      toast.error('保存排序失败')
+      // 恢复原始顺序
+      await loadTags()
+    }
+  }
+
+  const handleEditTag = async (tag: TagType) => {
+    const name = prompt('请输入新的标签名称', tag.name)
+    if (!name?.trim() || name.trim() === tag.name) return
+    
+    try {
+      await tagService.updateTag(tag.id, { name: name.trim() })
+      await loadTags()
+      toast.success('标签已更新')
+    } catch (error) {
+      toast.error('更新失败')
+    }
+  }
+
+  const handleDeleteTag = async (tag: TagType) => {
+    if (!confirm(`确定要删除标签“${tag.name}”吗？`)) return
+    
+    try {
+      await tagService.deleteTag(tag.id)
+      await loadTags()
+      toast.success('标签已删除')
+    } catch (error) {
+      toast.error('删除失败')
     }
   }
 
@@ -457,6 +671,47 @@ export default function Layout() {
                           isHovered={hoveredProject === project.id}
                           onHover={() => setHoveredProject(project.id)}
                           onHoverEnd={() => setHoveredProject(null)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              )}
+            </div>
+          )}
+
+          {/* Tags Section */}
+          {!isSidebarCollapsed && (
+            <div className="mb-4">
+              <button
+                onClick={() => setIsTagsExpanded(!isTagsExpanded)}
+                className="w-full flex items-center gap-2 px-2 py-2 text-sm text-gray-600 hover:text-gray-700 transition-colors"
+              >
+                {isTagsExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                <Tag className="w-4 h-4" />
+                <span>标签</span>
+              </button>
+              
+              {isTagsExpanded && tags.length > 0 && (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleTagDragEnd}
+                >
+                  <SortableContext
+                    items={tags.map(t => t.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-1 mt-1">
+                      {tags.map(tag => (
+                        <SortableTagItem
+                          key={tag.id}
+                          tag={tag}
+                          isHovered={hoveredTag === tag.id}
+                          onHover={() => setHoveredTag(tag.id)}
+                          onHoverEnd={() => setHoveredTag(null)}
+                          onEdit={() => handleEditTag(tag)}
+                          onDelete={() => handleDeleteTag(tag)}
                         />
                       ))}
                     </div>

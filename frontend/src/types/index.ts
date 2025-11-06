@@ -101,6 +101,7 @@ export interface Tag {
   id: number
   name: string
   color: string
+  order?: number
   user: number
   created_at: string
   updated_at: string
