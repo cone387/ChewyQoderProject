@@ -36,13 +36,84 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
+  useSortable,
 } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { cn } from '@/utils/cn'
 
 type ViewType = 'list' | 'kanban' | 'gantt'
 type GroupByType = 'status' | 'priority' | 'project' | 'tag' | 'date' | 'none'
 type SortByType = 'due_date' | 'priority' | 'created_at' | 'updated_at' | 'manual'
 type TaskScopeType = 'all' | 'my' | 'uncompleted' | 'completed'
+
+// 分组容器组件 - 用于跨组拖拽
+const GroupContainer = ({ groupName, children }: { groupName: string; children: React.ReactNode }) => {
+  const { setNodeRef } = useDroppable({
+    id: `group-${groupName}`,
+  })
+  
+  return (
+    <div ref={setNodeRef}>
+      {children}
+    </div>
+  )
+}
+
+// 可排序的分组标题组件
+const SortableGroupHeader = ({ 
+  groupName, 
+  count, 
+  isExpanded, 
+  onToggle 
+}: { 
+  groupName: string; 
+  count: number; 
+  isExpanded: boolean; 
+  onToggle: () => void;
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `group-header-${groupName}` })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-6 py-4 bg-gray-50 hover:bg-gray-100 transition-colors group"
+      >
+        <div className="flex items-center gap-3">
+          {/* 拖动手柄 - hover时显示 */}
+          <div
+            {...attributes}
+            {...listeners}
+            className="flex-shrink-0 cursor-move text-gray-400 hover:text-gray-600 transition-all opacity-0 group-hover:opacity-100"
+          >
+            <GripVertical className="w-4 h-4" />
+          </div>
+          <span className="text-sm font-semibold text-gray-700">{groupName}</span>
+          <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200 text-gray-600">
+            {count}
+          </span>
+        </div>
+        {isExpanded ? 
+          <ChevronUp className="w-5 h-5 text-gray-500" /> : 
+          <ChevronDown className="w-5 h-5 text-gray-500" />
+        }
+      </button>
+    </div>
+  )
+}
 
 export default function TasksPage() {
   const location = useLocation()
@@ -526,6 +597,30 @@ export default function TasksPage() {
 
     if (!over) return
 
+    // 分组标题的拖动排序
+    if (typeof active.id === 'string' && active.id.startsWith('group-header-')) {
+      const activeGroupName = active.id.replace('group-header-', '')
+      const overGroupName = typeof over.id === 'string' && over.id.startsWith('group-header-') 
+        ? over.id.replace('group-header-', '') 
+        : null
+
+      if (overGroupName && activeGroupName !== overGroupName) {
+        // 构建完整的分组列表（包括默认分组）
+        const allGroups = [...customGroups, '默认分组']
+        const oldIndex = allGroups.indexOf(activeGroupName)
+        const newIndex = allGroups.indexOf(overGroupName)
+
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const newGroups = arrayMove(allGroups, oldIndex, newIndex)
+          // 移除默认分组，只保存自定义分组的顺序
+          const newCustomGroups = newGroups.filter(g => g !== '默认分组')
+          setCustomGroups(newCustomGroups)
+          toast.success('分组顺序已更新')
+        }
+      }
+      return
+    }
+
     // 看板视图的跨列拖拽
     if (viewType === 'kanban') {
       const activeTask = tasks.find(t => t.id === active.id)
@@ -555,6 +650,56 @@ export default function TasksPage() {
         }
       }
       return
+    }
+
+    // 列表视图 - 自定义分组模式的跨组拖拽
+    if (viewType === 'list' && groupBy === 'status') {
+      const activeTask = tasks.find(t => t.id === active.id)
+      if (!activeTask) return
+
+      // 判断是否跨分组拖动
+      const activeGroup = (activeTask as any).custom_group || '默认分组'
+      
+      // 如果over.id是字符串，说明拖到了分组容器
+      if (typeof over.id === 'string' && over.id.startsWith('group-')) {
+        const targetGroup = over.id.replace('group-', '')
+        if (activeGroup !== targetGroup) {
+          // 跨组拖动，更新custom_group
+          try {
+            const updated = await taskService.updateTask(activeTask.id, { 
+              custom_group: targetGroup === '默认分组' ? undefined : targetGroup 
+            } as any)
+            setTasks(tasks.map(t => t.id === activeTask.id ? { ...updated, custom_group: targetGroup === '默认分组' ? undefined : targetGroup } as any : t))
+            toast.success(`任务已移动到"${targetGroup}"`)
+          } catch (error) {
+            console.error('更新任务分组失败:', error)
+            toast.error('更新失败')
+          }
+          return
+        }
+      }
+      
+      // 如果over.id是数字，说明拖到了具体任务上
+      if (typeof over.id === 'number') {
+        const overTask = tasks.find(t => t.id === over.id)
+        if (overTask) {
+          const targetGroup = (overTask as any).custom_group || '默认分组'
+          if (activeGroup !== targetGroup) {
+            // 跨组拖动
+            try {
+              const updated = await taskService.updateTask(activeTask.id, { 
+                custom_group: targetGroup === '默认分组' ? undefined : targetGroup 
+              } as any)
+              setTasks(tasks.map(t => t.id === activeTask.id ? { ...updated, custom_group: targetGroup === '默认分组' ? undefined : targetGroup } as any : t))
+              toast.success(`任务已移动到"${targetGroup}"`)
+            } catch (error) {
+              console.error('更新任务分组失败:', error)
+              toast.error('更新失败')
+            }
+            return
+          }
+        }
+      }
     }
 
     // 列表视图的拖拽排序
@@ -957,62 +1102,133 @@ export default function TasksPage() {
 
         {/* 任务分组列表 - 列表视图 */}
         {viewType === 'list' && (
-          <div className="space-y-6">
-            {Object.entries(groupedTasks).map(([groupName, groupTasks]) => (
-              <div key={groupName} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                <button
-                  onClick={() => toggleGroupExpanded(groupName)}
-                  className="w-full flex items-center justify-between px-6 py-4 bg-gray-50 hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-700">{groupName}</span>
-                    <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200 text-gray-600">
-                      {groupTasks.length}
-                    </span>
-                  </div>
-                  {expandedGroups[groupName] !== false ? 
-                    <ChevronUp className="w-5 h-5 text-gray-500" /> : 
-                    <ChevronDown className="w-5 h-5 text-gray-500" />
-                  }
-                </button>
-                
-                {expandedGroups[groupName] !== false && (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <SortableContext
-                      items={groupTasks.map(t => t.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div className="p-4 space-y-2">
-                        {groupTasks.map((task) => (
-                          <SortableTaskItem
-                            key={task.id}
-                            task={task}
-                            onToggleComplete={handleToggleComplete}
-                            onClick={setSelectedTask}
-                            onEdit={(task: Task) => setSelectedTask(task)}
-                            onDelete={() => handleDeleteTask(task.id)}
-                            visibleFields={visibleFields}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            {/* 自定义分组模式：按customGroups顺序显示 */}
+            {groupBy === 'status' ? (
+              <SortableContext
+                items={[...customGroups, '默认分组'].map(g => `group-header-${g}`)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-6">
+                  {/* 按customGroups顺序显示 */}
+                  {[...customGroups, '默认分组'].map(groupName => {
+                    const groupTasks = groupedTasks[groupName] || []
+                    return (
+                      <GroupContainer key={groupName} groupName={groupName}>
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                          <SortableGroupHeader
+                            groupName={groupName}
+                            count={groupTasks.length}
+                            isExpanded={expandedGroups[groupName] !== false}
+                            onToggle={() => toggleGroupExpanded(groupName)}
                           />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
+                          
+                          {expandedGroups[groupName] !== false && (
+                            <SortableContext
+                              items={groupTasks.map(t => t.id)}
+                              strategy={verticalListSortingStrategy}
+                            >
+                              <div className="p-4 space-y-2">
+                                {groupTasks.map((task) => (
+                                  <SortableTaskItem
+                                    key={task.id}
+                                    task={task}
+                                    onToggleComplete={handleToggleComplete}
+                                    onClick={setSelectedTask}
+                                    onEdit={(task: Task) => setSelectedTask(task)}
+                                    onDelete={() => handleDeleteTask(task.id)}
+                                    visibleFields={visibleFields}
+                                  />
+                                ))}
+                              </div>
+                            </SortableContext>
+                          )}
+                        </div>
+                      </GroupContainer>
+                    )
+                  })}
+
+                  {/* 空状态 */}
+                  {Object.keys(groupedTasks).length === 0 && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center text-gray-500">
+                      <p className="text-lg">暂无任务</p>
+                      <p className="text-sm mt-2">点击上方按钮创建新任务</p>
+                    </div>
+                  )}
+                </div>
+              </SortableContext>
+            ) : (
+              /* 其他分组模式：按groupedTasks顺序显示 */
+              <div className="space-y-6">
+                {Object.entries(groupedTasks).map(([groupName, groupTasks]) => (
+                  <GroupContainer key={groupName} groupName={groupName}>
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                      <button
+                        onClick={() => toggleGroupExpanded(groupName)}
+                        className="w-full flex items-center justify-between px-6 py-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-gray-700">{groupName}</span>
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200 text-gray-600">
+                            {groupTasks.length}
+                          </span>
+                        </div>
+                        {expandedGroups[groupName] !== false ? 
+                          <ChevronUp className="w-5 h-5 text-gray-500" /> : 
+                          <ChevronDown className="w-5 h-5 text-gray-500" />
+                        }
+                      </button>
+                      
+                      {expandedGroups[groupName] !== false && (
+                        <SortableContext
+                          items={groupTasks.map(t => t.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <div className="p-4 space-y-2">
+                            {groupTasks.map((task) => (
+                              <SortableTaskItem
+                                key={task.id}
+                                task={task}
+                                onToggleComplete={handleToggleComplete}
+                                onClick={setSelectedTask}
+                                onEdit={(task: Task) => setSelectedTask(task)}
+                                onDelete={() => handleDeleteTask(task.id)}
+                                visibleFields={visibleFields}
+                              />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      )}
+                    </div>
+                  </GroupContainer>
+                ))}
+
+                {/* 空状态 */}
+                {Object.keys(groupedTasks).length === 0 && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center text-gray-500">
+                    <p className="text-lg">暂无任务</p>
+                    <p className="text-sm mt-2">点击上方按钮创建新任务</p>
+                  </div>
                 )}
               </div>
-            ))}
-
-            {/* 空状态 */}
-            {Object.keys(groupedTasks).length === 0 && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center text-gray-500">
-                <p className="text-lg">暂无任务</p>
-                <p className="text-sm mt-2">点击上方按钮创建新任务</p>
-              </div>
             )}
-          </div>
+
+            {/* 拖动预览 */}
+            <DragOverlay>
+              {activeTaskId ? (
+                <div className="bg-white rounded-lg border-2 border-blue-500 p-4 shadow-lg opacity-80">
+                  <div className="font-medium text-gray-900">
+                    {tasks.find(t => t.id === activeTaskId)?.title}
+                  </div>
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         )}
 
         {/* 看板视图 */}

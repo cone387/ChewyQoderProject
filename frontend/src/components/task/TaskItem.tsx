@@ -60,11 +60,11 @@ const TaskItem = ({
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      {/* 拖动手柄 */}
+      {/* 拖动手柄 - 只在hover时显示 */}
       {dragHandleProps && (
         <div
           {...dragHandleProps}
-          className="flex-shrink-0 cursor-move text-gray-400 hover:text-gray-600 transition-colors"
+          className="flex-shrink-0 cursor-move text-gray-400 hover:text-gray-600 transition-all opacity-0 group-hover:opacity-100"
         >
           <GripVertical className="w-4 h-4" />
         </div>
