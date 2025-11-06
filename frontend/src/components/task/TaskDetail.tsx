@@ -17,9 +17,10 @@ interface TaskDetailProps {
   onUpdate: (updates: Partial<Task>) => void
   onDelete: () => void
   onCreate?: (taskData: Partial<Task>) => void // 新增：支持创建模式
+  customGroups?: string[] // 新增：自定义分组列表
 }
 
-const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: TaskDetailProps) => {
+const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate, customGroups = [] }: TaskDetailProps) => {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<Task['priority']>('none')
@@ -27,6 +28,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
   const [dueDate, setDueDate] = useState('')
   const [status, setStatus] = useState<Task['status']>('todo')
   const [projectId, setProjectId] = useState<number | null>(null)
+  const [customGroup, setCustomGroup] = useState<string>('') // 新增：自定义分组
   const [projects, setProjects] = useState<Project[]>([])
   const [tags, setTags] = useState<Tag[]>([])
   const [selectedTags, setSelectedTags] = useState<number[]>([])
@@ -50,6 +52,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
       setProjectId(
         task.project && typeof task.project === 'object' ? task.project.id : task.project || null
       )
+      setCustomGroup((task as any).custom_group || '') // 设置自定义分组
       // 设置已选标签
       if (task.tags && Array.isArray(task.tags)) {
         const tagIds = task.tags.map(t => typeof t === 'object' ? t.id : t).filter(Boolean) as number[]
@@ -90,7 +93,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
       return
     }
 
-    const taskData = {
+    const taskData: any = {
       title,
       description,
       priority,
@@ -99,6 +102,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
       status,
       project: projectId || undefined,
       tags: selectedTags.length > 0 ? selectedTags : undefined,
+      custom_group: customGroup || undefined, // 添加自定义分组
     }
 
     if (isCreateMode && onCreate) {
@@ -317,6 +321,27 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate }: Tas
               ))}
             </select>
           </div>
+
+          {/* 自定义分组 - 图标 + 选项 */}
+          {customGroups.length > 0 && (
+            <div className="flex items-center gap-3">
+              <span title="自定义分组" className="flex-shrink-0 cursor-help">
+                <TagIcon className="w-4 h-4 text-gray-500" />
+              </span>
+              <select
+                value={customGroup}
+                onChange={(e) => setCustomGroup(e.target.value)}
+                className="flex-1 px-3 py-1.5 text-xs border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 hover:border-gray-300"
+              >
+                <option value="">默认分组</option>
+                {customGroups.map((group) => (
+                  <option key={group} value={group}>
+                    {group}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* 开始时间 - 图标 + 选项 */}
           <div className="flex items-center gap-3">

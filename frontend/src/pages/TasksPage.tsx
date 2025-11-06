@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
+import Modal from '@/components/ui/Modal'
 import SortableTaskItem from '@/components/task/SortableTaskItem'
 import KanbanCard from '@/components/task/KanbanCard'
 import DroppableColumn from '@/components/task/DroppableColumn'
@@ -82,6 +83,8 @@ export default function TasksPage() {
   const [isFieldConfigOpen, setIsFieldConfigOpen] = useState(false)
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false)
   const [isNewTaskDropdownOpen, setIsNewTaskDropdownOpen] = useState(false)
+  const [isNewGroupModalOpen, setIsNewGroupModalOpen] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
   
   // 自定义分组
   const [customGroups, setCustomGroups] = useState<string[]>(() => {
@@ -310,6 +313,22 @@ export default function TasksPage() {
     }))
   }
 
+  const handleCreateGroup = () => {
+    const groupName = newGroupName.trim()
+    if (!groupName) {
+      toast.error('请输入分组名称')
+      return
+    }
+    if (customGroups.includes(groupName)) {
+      toast.error('分组已存在')
+      return
+    }
+    setCustomGroups([...customGroups, groupName])
+    setIsNewGroupModalOpen(false)
+    setNewGroupName('')
+    toast.success(`分组"${groupName}"已创建`)
+  }
+
   // 搜索筛选
   const searchedTasks = tasks.filter(task => 
     task.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -401,9 +420,26 @@ export default function TasksPage() {
     const groups: Record<string, Task[]> = {}
 
     if (groupBy === 'status') {
-      groups['待办'] = sortedTasks.filter(t => t.status === 'todo')
-      groups['进行中'] = sortedTasks.filter(t => t.status === 'in_progress')
-      groups['已完成'] = sortedTasks.filter(t => t.status === 'completed')
+      // 自定义分组模式
+      // 先按照用户创建的分组名称进行分组
+      customGroups.forEach(groupName => {
+        groups[groupName] = []
+      })
+      
+      // 添加默认分组（用于未分配的任务）
+      groups['默认分组'] = []
+      
+      // 将任务分配到对应的分组
+      sortedTasks.forEach(task => {
+        // TODO: 这里需要任务模型有一个 custom_group 字段
+        // 暂时都放到默认分组
+        const taskGroup = (task as any).custom_group || '默认分组'
+        if (groups[taskGroup]) {
+          groups[taskGroup].push(task)
+        } else {
+          groups['默认分组'].push(task)
+        }
+      })
     } else if (groupBy === 'priority') {
       groups['紧急'] = sortedTasks.filter(t => t.priority === 'urgent')
       groups['高'] = sortedTasks.filter(t => t.priority === 'high')
@@ -460,15 +496,20 @@ export default function TasksPage() {
       groups['无截止日期'] = sortedTasks.filter(t => !t.due_date)
     }
 
-    // 移除空分组
+    // 移除空分组（但保留自定义分组，即使为空也显示）
     Object.keys(groups).forEach(key => {
+      // 如果是自定义分组模式，保留所有自定义分组
+      if (groupBy === 'status' && customGroups.includes(key)) {
+        return // 保留自定义分组
+      }
+      // 其他情况下移除空分组
       if (groups[key].length === 0) {
         delete groups[key]
       }
     })
 
     return groups
-  }, [sortedTasks, groupBy])
+  }, [sortedTasks, groupBy, customGroups])
 
   // 筛选条件数量
   const filterCount = filterProjects.length + filterTags.length + filterPriorities.length + filterStatuses.length
@@ -670,15 +711,7 @@ export default function TasksPage() {
                   <div className="p-1">
                     <button
                       onClick={() => {
-                        const groupName = prompt('请输入分组名称')
-                        if (groupName && groupName.trim()) {
-                          if (customGroups.includes(groupName.trim())) {
-                            toast.error('分组已存在')
-                          } else {
-                            setCustomGroups([...customGroups, groupName.trim()])
-                            toast.success(`分组"${groupName}"已创建`)
-                          }
-                        }
+                        setIsNewGroupModalOpen(true)
                         setIsNewTaskDropdownOpen(false)
                       }}
                       className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
@@ -827,33 +860,6 @@ export default function TasksPage() {
                         {group.label}
                       </button>
                     ))}
-                    
-                    {/* 自定义分组列表 */}
-                    {groupBy === 'status' && customGroups.length > 0 && (
-                      <>
-                        <div className="border-t border-gray-200 my-1" />
-                        <div className="px-2 py-1 text-xs text-gray-500 font-medium">自定义分组</div>
-                        {customGroups.map((groupName) => (
-                          <div key={groupName} className="flex items-center justify-between group">
-                            <button
-                              className="flex-1 text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                            >
-                              {groupName}
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setCustomGroups(customGroups.filter(g => g !== groupName))
-                                toast.success(`分组"${groupName}"已删除`)
-                              }}
-                              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded transition-all"
-                            >
-                              <X className="w-3 h-3 text-red-500" />
-                            </button>
-                          </div>
-                        ))}
-                      </>
-                    )}
                   </div>
                 </div>
               )}
@@ -1110,6 +1116,7 @@ export default function TasksPage() {
             handleDeleteTask(selectedTask.id)
           }
         }}
+        customGroups={customGroups}
       />
 
       {/* 新建任务弹窗 - 使用统一的TaskDetail组件 */}
@@ -1122,6 +1129,7 @@ export default function TasksPage() {
         onUpdate={() => {}}
         onDelete={() => {}}
         onCreate={handleCreateTask}
+        customGroups={customGroups}
       />
 
       {/* 筛选面板 */}
@@ -1344,6 +1352,51 @@ export default function TasksPage() {
           </div>
         </div>
       )}
+
+      {/* 新建分组弹窗 */}
+      <Modal 
+        isOpen={isNewGroupModalOpen} 
+        onClose={() => {
+          setIsNewGroupModalOpen(false)
+          setNewGroupName('')
+        }} 
+        title="新建分组"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              分组名称
+            </label>
+            <Input
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              placeholder="请输入分组名称..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleCreateGroup()
+                }
+              }}
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              onClick={() => {
+                setIsNewGroupModalOpen(false)
+                setNewGroupName('')
+              }}
+              variant="outline"
+            >
+              取消
+            </Button>
+            <Button onClick={handleCreateGroup}>
+              创建
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
