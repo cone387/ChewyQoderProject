@@ -200,7 +200,6 @@ export default function TasksPage() {
   const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([])
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null)
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
-  const [tasksNeedEnrichment, setTasksNeedEnrichment] = useState(false)
   
   // 筛选状态
   const [filterProjects, setFilterProjects] = useState<number[]>([])
@@ -316,29 +315,6 @@ export default function TasksPage() {
     }
   }, [currentView])
 
-  // 当tags或projects加载完成后，重新转换任务数据
-  useEffect(() => {
-    if ((tags.length > 0 || projects.length > 0) && tasks.length > 0 && tasksNeedEnrichment) {
-      // 检查是否有任务需要转换
-      const needsTagEnrichment = tasks.some(task => 
-        task.tags && 
-        Array.isArray(task.tags) && 
-        task.tags.length > 0 && 
-        typeof task.tags[0] === 'number'
-      )
-      
-      const needsProjectEnrichment = tasks.some(task =>
-        task.project && typeof task.project === 'number'
-      )
-      
-      if (needsTagEnrichment || needsProjectEnrichment) {
-        const enrichedData = enrichTasksWithTags(tasks)
-        setTasks(enrichedData)
-        setTasksNeedEnrichment(false) // 标记已完成转换
-      }
-    }
-  }, [tags.length, projects.length, tasksNeedEnrichment, tasks.length])
-
   useEffect(() => {
     // 保存分组展开状态到 localStorage
     localStorage.setItem('expandedGroups', JSON.stringify(expandedGroups))
@@ -375,56 +351,20 @@ export default function TasksPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // 将任务的标签ID和项目ID转换为对象
-  const enrichTasksWithTags = (tasks: Task[]): Task[] => {
-    return tasks.map(task => {
-      let enrichedTask = { ...task }
-      
-      // 转换标签
-      if (enrichedTask.tags && Array.isArray(enrichedTask.tags)) {
-        const enrichedTags = enrichedTask.tags
-          .map(tagId => {
-            if (typeof tagId === 'number') {
-              return tags.find(t => t.id === tagId)
-            }
-            return tagId // 已经是对象了
-          })
-          .filter(tag => tag !== undefined) as Tag[]
-        
-        enrichedTask = { ...enrichedTask, tags: enrichedTags }
-      }
-      
-      // 转换项目
-      if (enrichedTask.project && typeof enrichedTask.project === 'number') {
-        const projectObj = projects.find(p => p.id === enrichedTask.project)
-        if (projectObj) {
-          enrichedTask = { ...enrichedTask, project: projectObj }
-        }
-      }
-      
-      return enrichedTask
-    })
-  }
-
   const loadTasksForView = async () => {
     try {
       setIsLoading(true)
       let data: Task[] = []
 
       if (typeof currentView === 'number') {
-        // 加载指定项目的任务
         data = await taskService.getTasks({ project: currentView })
       } else if (['inbox', 'completed', 'trash'].includes(currentView)) {
-        // 加载系统清单
         const response = await taskService.getSystemList(currentView as SystemListType)
         data = response.results
       }
 
-      // 转换标签ID为标签对象
-      const enrichedData = enrichTasksWithTags(data)
-      setTasks(Array.isArray(enrichedData) ? enrichedData : [])
-      // 标记需要enrichment（如果tags/projects还未加载）
-      setTasksNeedEnrichment(true)
+      // 后端已经返回完整的标签和项目对象，无需前端转换
+      setTasks(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('加载任务失败:', error)
       toast.error('加载任务失败')
@@ -471,9 +411,8 @@ export default function TasksPage() {
         ...taskData,
         project: typeof currentView === 'number' ? currentView : undefined,
       })
-      // 转换标签
-      const enrichedTask = enrichTasksWithTags([newTask])[0]
-      setTasks([enrichedTask, ...tasks])
+      // 后端已返回完整对象，无需转换
+      setTasks([newTask, ...tasks])
       setIsModalOpen(false)
       toast.success('任务创建成功')
     } catch (error) {
@@ -486,14 +425,13 @@ export default function TasksPage() {
     try {
       const newStatus = task.status === 'completed' ? 'todo' : 'completed'
       const updated = await taskService.updateTask(task.id, { status: newStatus })
-      // 转换标签
-      const enrichedTask = enrichTasksWithTags([updated])[0]
+      // 后端已返回完整对象，无需转换
       
       if (newStatus === 'completed' && currentView !== 'completed') {
         // 如果不在已完成视图，从列表中移除
         setTasks(tasks.filter(t => t.id !== task.id))
       } else {
-        setTasks(tasks.map(t => t.id === task.id ? enrichedTask : t))
+        setTasks(tasks.map(t => t.id === task.id ? updated : t))
       }
       
       toast.success(newStatus === 'completed' ? '任务已完成' : '任务标记为未完成')
@@ -505,9 +443,9 @@ export default function TasksPage() {
   const handleUpdateTask = async (taskId: number, updates: Partial<Task>) => {
     try {
       const updated = await taskService.updateTask(taskId, updates)
-      // 转换标签
-      const enrichedTask = enrichTasksWithTags([updated])[0]
-      setTasks(tasks.map(t => t.id === taskId ? enrichedTask : t))
+      // 后端已返回完整对象，无需转换
+      setTasks(tasks.map(t => t.id === taskId ? updated : t))
+
       toast.success('任务更新成功')
       
       // 如果状态变为已完成，且当前不在“已完成”视图，则从列表中移除

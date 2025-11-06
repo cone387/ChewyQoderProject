@@ -6,6 +6,7 @@ from apps.tags.models import TaskTag
 class TaskSerializer(serializers.ModelSerializer):
     subtasks_count = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
+    project = serializers.SerializerMethodField()
     
     class Meta:
         model = Task
@@ -20,8 +21,17 @@ class TaskSerializer(serializers.ModelSerializer):
         return obj.subtasks.count()
     
     def get_tags(self, obj):
-        # 返回任务关联的所有标签ID
-        return list(obj.task_tags.values_list('tag_id', flat=True))
+        # 返回任务关联的所有标签对象
+        from apps.tags.serializers import TagSerializer
+        tags = [task_tag.tag for task_tag in obj.task_tags.select_related('tag').all()]
+        return TagSerializer(tags, many=True).data
+    
+    def get_project(self, obj):
+        # 返回项目完整对象
+        if obj.project:
+            from apps.projects.serializers import ProjectSimpleSerializer
+            return ProjectSimpleSerializer(obj.project).data
+        return None
 
     def create(self, validated_data):
         # 处理tags字段

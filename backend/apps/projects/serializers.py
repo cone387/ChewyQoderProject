@@ -2,6 +2,14 @@ from rest_framework import serializers
 from .models import Project
 
 
+class ProjectSimpleSerializer(serializers.ModelSerializer):
+    """简化的项目序列化器，用于嵌套在任务中"""
+    class Meta:
+        model = Project
+        fields = ['id', 'name', 'description', 'color', 'is_favorite', 'is_pinned']
+        read_only_fields = fields
+
+
 class ProjectSerializer(serializers.ModelSerializer):
     tasks_count = serializers.SerializerMethodField()
     uncompleted_count = serializers.SerializerMethodField()

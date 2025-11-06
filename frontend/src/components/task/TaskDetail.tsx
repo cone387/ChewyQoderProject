@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Tag as TagIcon, Trash2, FolderKanban, X, Plus, Clock, Circle, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Calendar, Tag as TagIcon, Trash2, FolderKanban, X, Plus, Clock, Circle, AlertCircle, CheckCircle2, Layers } from 'lucide-react'
 import { Task, Project, Tag } from '@/types'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
@@ -255,8 +255,14 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate, custo
         <div className="bg-gray-50 rounded-2xl p-5 space-y-4 border border-gray-200">
           {/* 状态 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <span title="状态" className="flex-shrink-0 cursor-help">
+            <span 
+              title="任务状态"
+              className="flex-shrink-0 cursor-help group relative"
+            >
               <Circle className="w-4 h-4 text-gray-500" />
+              <div className="absolute left-6 top-0 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                任务状态
+              </div>
             </span>
             <div className="flex flex-wrap gap-2 flex-1">
               {statusOptions.map((option) => (
@@ -280,8 +286,14 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate, custo
 
           {/* 优先级 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <span title="优先级" className="flex-shrink-0 cursor-help">
+            <span 
+              title="优先级"
+              className="flex-shrink-0 cursor-help group relative"
+            >
               <AlertCircle className="w-4 h-4 text-gray-500" />
+              <div className="absolute left-6 top-0 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                优先级
+              </div>
             </span>
             <div className="flex flex-wrap gap-2 flex-1">
               {priorityOptions.map((option) => (
@@ -305,8 +317,14 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate, custo
 
           {/* 所属项目 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <span title="所属项目" className="flex-shrink-0 cursor-help">
+            <span 
+              title="所属项目"
+              className="flex-shrink-0 cursor-help group relative"
+            >
               <FolderKanban className="w-4 h-4 text-gray-500" />
+              <div className="absolute left-6 top-0 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                所属项目
+              </div>
             </span>
             <select
               value={projectId || ''}
@@ -325,8 +343,14 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate, custo
           {/* 自定义分组 - 图标 + 选项 */}
           {customGroups.length > 0 && (
             <div className="flex items-center gap-3">
-              <span title="自定义分组" className="flex-shrink-0 cursor-help">
-                <TagIcon className="w-4 h-4 text-gray-500" />
+              <span 
+                title="自定义分组"
+                className="flex-shrink-0 cursor-help group relative"
+              >
+                <Layers className="w-4 h-4 text-gray-500" />
+                <div className="absolute left-6 top-0 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                  自定义分组
+                </div>
               </span>
               <select
                 value={customGroup}
@@ -345,8 +369,14 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate, custo
 
           {/* 开始时间 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <span title="开始时间" className="flex-shrink-0 cursor-help">
+            <span 
+              title="开始时间"
+              className="flex-shrink-0 cursor-help group relative"
+            >
               <Clock className="w-4 h-4 text-gray-500" />
+              <div className="absolute left-6 top-0 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                开始时间
+              </div>
             </span>
             <div className="flex gap-2 flex-1 items-center">
               <Input
@@ -369,8 +399,14 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate, custo
 
           {/* 截止时间 - 图标 + 选项 */}
           <div className="flex items-center gap-3">
-            <span title="截止时间" className="flex-shrink-0 cursor-help">
+            <span 
+              title="截止时间"
+              className="flex-shrink-0 cursor-help group relative"
+            >
               <Calendar className="w-4 h-4 text-gray-500" />
+              <div className="absolute left-6 top-0 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                截止时间
+              </div>
             </span>
             <div className="flex gap-2 flex-1 items-center">
               <Input
@@ -393,8 +429,14 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate, custo
 
           {/* 标签 - 图标 + 选项 */}
           <div className="flex items-start gap-3">
-            <span title="标签" className="flex-shrink-0 mt-[1px] cursor-help">
+            <span 
+              title="标签"
+              className="flex-shrink-0 mt-[1px] cursor-help group relative"
+            >
               <TagIcon className="w-4 h-4 text-gray-500" />
+              <div className="absolute left-6 top-0 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                标签
+              </div>
             </span>
             <div className="flex-1">
               <div className="flex items-center justify-between mb-2">

@@ -4,13 +4,117 @@ import { useAuthStore } from '@/store/auth'
 import { 
   Inbox, CheckCircle2, Trash2, Plus, ChevronLeft, ChevronRight, 
   ChevronDown, ChevronUp, MoreHorizontal, Calendar, Tag, FolderKanban, 
-  BarChart3, Settings, LogOut, Edit2, Star, StarOff, Folder
+  BarChart3, Settings, LogOut, Edit2, Star, StarOff, Folder, GripVertical
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { projectService } from '@/services/project'
 import { taskService } from '@/services/task'
 import type { Project, SystemListType } from '@/types'
 import toast from 'react-hot-toast'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+
+// 可排序的项目项组件
+function SortableProjectItem({ 
+  project, 
+  isSelected, 
+  onSelect, 
+  onTogglePin, 
+  isHovered,
+  onHover,
+  onHoverEnd 
+}: { 
+  project: Project
+  isSelected: boolean
+  onSelect: () => void
+  onTogglePin: (e: React.MouseEvent) => void
+  isHovered: boolean
+  onHover: () => void
+  onHoverEnd: () => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: project.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "group relative",
+        isDragging && "opacity-50"
+      )}
+      onMouseEnter={onHover}
+      onMouseLeave={onHoverEnd}
+    >
+      <button
+        onClick={onSelect}
+        className={cn(
+          'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200',
+          isSelected
+            ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600 font-medium'
+            : 'text-gray-700 hover:bg-gray-50'
+        )}
+      >
+        {/* 拖动手柄 */}
+        <div
+          {...attributes}
+          {...listeners}
+          className="flex-shrink-0 cursor-move text-gray-400 hover:text-gray-600 transition-all opacity-0 group-hover:opacity-100"
+        >
+          <GripVertical className="w-4 h-4" />
+        </div>
+        
+        <div
+          className="w-3 h-3 rounded-full flex-shrink-0"
+          style={{ backgroundColor: project.color }}
+        />
+        <span className="flex-1 text-left text-sm truncate">{project.name}</span>
+        <span className="text-xs text-gray-500">
+          {project.uncompleted_count || 0}
+        </span>
+      </button>
+      {isHovered && (
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-white rounded-lg shadow-sm border border-gray-200 px-1">
+          <button
+            onClick={onTogglePin}
+            className="p-1 hover:bg-gray-100 rounded transition-colors"
+            title={project.is_pinned ? "取消置顶" : "置顶"}
+          >
+            {project.is_pinned ? (
+              <StarOff className="w-3.5 h-3.5 text-gray-600" />
+            ) : (
+              <Star className="w-3.5 h-3.5 text-gray-600" />
+            )}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Layout() {
   const { isAuthenticated, logout, checkAuth } = useAuthStore()
@@ -27,6 +131,15 @@ export default function Layout() {
   const [completedCount, setCompletedCount] = useState(0)
   const [trashCount, setTrashCount] = useState(0)
   const [hoveredProject, setHoveredProject] = useState<number | null>(null)
+  
+  // 拖动传感器
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 需要拖动8px才开始拖动，避免与点击冲突
+      },
+    })
+  )
   
   useEffect(() => {
     checkAuth()
@@ -111,6 +224,46 @@ export default function Layout() {
       toast.success('清单创建成功')
     } catch (error) {
       toast.error('创建失败')
+    }
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (!over || active.id === over.id) return
+
+    const oldIndex = normalProjects.findIndex(p => p.id === active.id)
+    const newIndex = normalProjects.findIndex(p => p.id === over.id)
+
+    if (oldIndex === -1 || newIndex === -1) return
+
+    // 本地更新顺序
+    const reorderedProjects = arrayMove(normalProjects, oldIndex, newIndex)
+    
+    // 更新所有项目的order字段
+    const updatedProjects = [...pinnedProjects, ...reorderedProjects]
+    setProjects(updatedProjects)
+
+    try {
+      // 批量更新后端
+      const updates = reorderedProjects.map((project, index) => ({
+        id: project.id,
+        order: index
+      }))
+      
+      // 逐个更新
+      await Promise.all(
+        updates.map(update => 
+          projectService.updateProject(update.id, { order: update.order })
+        )
+      )
+      
+      toast.success('排序已保存')
+    } catch (error) {
+      console.error('保存排序失败:', error)
+      toast.error('保存排序失败')
+      // 恢复原始顺序
+      await loadProjects()
     }
   }
 
@@ -283,47 +436,32 @@ export default function Layout() {
                 )}
               </div>
               
-              {isNormalExpanded && (
-                <div className="space-y-1 mt-1">
-                  {normalProjects.map(project => (
-                    <div
-                      key={project.id}
-                      className="group relative"
-                      onMouseEnter={() => setHoveredProject(project.id)}
-                      onMouseLeave={() => setHoveredProject(null)}
-                    >
-                      <button
-                        onClick={() => handleSelectView(project.id)}
-                        className={cn(
-                          'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200',
-                          selectedView === project.id
-                            ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600 font-medium'
-                            : 'text-gray-700 hover:bg-gray-50'
-                        )}
-                      >
-                        <div
-                          className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: project.color }}
+              {isNormalExpanded && normalProjects.length > 0 && (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={normalProjects.map(p => p.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-1 mt-1">
+                      {normalProjects.map(project => (
+                        <SortableProjectItem
+                          key={project.id}
+                          project={project}
+                          isSelected={selectedView === project.id}
+                          onSelect={() => handleSelectView(project.id)}
+                          onTogglePin={(e) => handleTogglePin(project.id, e)}
+                          isHovered={hoveredProject === project.id}
+                          onHover={() => setHoveredProject(project.id)}
+                          onHoverEnd={() => setHoveredProject(null)}
                         />
-                        <span className="flex-1 text-left text-sm truncate">{project.name}</span>
-                        <span className="text-xs text-gray-500">
-                          {project.uncompleted_count || 0}
-                        </span>
-                      </button>
-                      {hoveredProject === project.id && (
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-white rounded-lg shadow-sm border border-gray-200 px-1">
-                          <button
-                            onClick={(e) => handleTogglePin(project.id, e)}
-                            className="p-1 hover:bg-gray-100 rounded transition-colors"
-                            title="置顶"
-                          >
-                            <Star className="w-3.5 h-3.5 text-gray-600" />
-                          </button>
-                        </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </SortableContext>
+                </DndContext>
               )}
             </div>
           )}
