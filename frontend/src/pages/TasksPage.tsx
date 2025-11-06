@@ -81,6 +81,13 @@ export default function TasksPage() {
   const [isScopeDropdownOpen, setIsScopeDropdownOpen] = useState(false)
   const [isFieldConfigOpen, setIsFieldConfigOpen] = useState(false)
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false)
+  const [isNewTaskDropdownOpen, setIsNewTaskDropdownOpen] = useState(false)
+  
+  // 自定义分组
+  const [customGroups, setCustomGroups] = useState<string[]>(() => {
+    const saved = localStorage.getItem('task_custom_groups')
+    return saved ? JSON.parse(saved) : []
+  })
   
   // 字段配置
   const [visibleFields, setVisibleFields] = useState<string[]>(() => {
@@ -116,6 +123,11 @@ export default function TasksPage() {
     // 保存分组方式
     localStorage.setItem('task_group_by', groupBy)
   }, [groupBy])
+
+  useEffect(() => {
+    // 保存自定义分组
+    localStorage.setItem('task_custom_groups', JSON.stringify(customGroups))
+  }, [customGroups])
 
   useEffect(() => {
     // 保存字段配置
@@ -169,6 +181,7 @@ export default function TasksPage() {
         setIsSortDropdownOpen(false)
         setIsGroupDropdownOpen(false)
         setIsFieldConfigOpen(false)
+        setIsNewTaskDropdownOpen(false)
       }
     }
     
@@ -633,15 +646,48 @@ export default function TasksPage() {
           {/* 工具栏 */}
           <div className="flex items-center gap-3 flex-wrap">
             {/* 新建任务 */}
-            <div className="relative">
+            <div className="relative dropdown-container flex items-stretch">
+              {/* 主按钮 - 新建任务 */}
               <button
                 onClick={() => setIsModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-50 transition-colors border-r-0"
               >
                 <Plus className="w-4 h-4" />
                 新建任务
+              </button>
+              
+              {/* 下拉按钮 */}
+              <button
+                onClick={() => setIsNewTaskDropdownOpen(!isNewTaskDropdownOpen)}
+                className="flex items-center justify-center px-2 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-50 transition-colors border-l border-l-gray-200"
+              >
                 <ChevronDown className="w-4 h-4" />
               </button>
+              
+              {/* 下拉菜单 */}
+              {isNewTaskDropdownOpen && (
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
+                  <div className="p-1">
+                    <button
+                      onClick={() => {
+                        const groupName = prompt('请输入分组名称')
+                        if (groupName && groupName.trim()) {
+                          if (customGroups.includes(groupName.trim())) {
+                            toast.error('分组已存在')
+                          } else {
+                            setCustomGroups([...customGroups, groupName.trim()])
+                            toast.success(`分组"${groupName}"已创建`)
+                          }
+                        }
+                        setIsNewTaskDropdownOpen(false)
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                    >
+                      新建分组
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 全部任务 */}
@@ -781,6 +827,33 @@ export default function TasksPage() {
                         {group.label}
                       </button>
                     ))}
+                    
+                    {/* 自定义分组列表 */}
+                    {groupBy === 'status' && customGroups.length > 0 && (
+                      <>
+                        <div className="border-t border-gray-200 my-1" />
+                        <div className="px-2 py-1 text-xs text-gray-500 font-medium">自定义分组</div>
+                        {customGroups.map((groupName) => (
+                          <div key={groupName} className="flex items-center justify-between group">
+                            <button
+                              className="flex-1 text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                            >
+                              {groupName}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setCustomGroups(customGroups.filter(g => g !== groupName))
+                                toast.success(`分组"${groupName}"已删除`)
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded transition-all"
+                            >
+                              <X className="w-3 h-3 text-red-500" />
+                            </button>
+                          </div>
+                        ))}
+                      </>
+                    )}
                   </div>
                 </div>
               )}
