@@ -7,9 +7,10 @@ import { GripVertical } from 'lucide-react'
 interface KanbanCardProps {
   task: Task
   onClick: (task: Task) => void
+  visibleFields?: string[]
 }
 
-export default function KanbanCard({ task, onClick }: KanbanCardProps) {
+export default function KanbanCard({ task, onClick, visibleFields = ['priority', 'project', 'tags', 'due_date'] }: KanbanCardProps) {
   const {
     attributes,
     listeners,
@@ -44,7 +45,7 @@ export default function KanbanCard({ task, onClick }: KanbanCardProps) {
         <h4 className="flex-1 font-medium text-gray-900">{task.title}</h4>
       </div>
       
-      {task.project && typeof task.project === 'object' && (
+      {visibleFields.includes('project') && task.project && typeof task.project === 'object' && (
         <div className="flex items-center gap-1 text-xs text-gray-600 mb-2">
           <div
             className="w-2 h-2 rounded-full"
@@ -54,7 +55,7 @@ export default function KanbanCard({ task, onClick }: KanbanCardProps) {
         </div>
       )}
 
-      {task.tags && Array.isArray(task.tags) && task.tags.length > 0 && (
+      {visibleFields.includes('tags') && task.tags && Array.isArray(task.tags) && task.tags.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
           {task.tags.slice(0, 3).map((tag) => (
             <span
@@ -72,7 +73,7 @@ export default function KanbanCard({ task, onClick }: KanbanCardProps) {
 
       <div className="flex items-center justify-between text-xs text-gray-500">
         <div className="flex items-center gap-2">
-          {task.priority && task.priority !== 'none' && (
+          {visibleFields.includes('priority') && task.priority && task.priority !== 'none' && (
             <span
               className={cn(
                 'w-2 h-2 rounded-full',
@@ -83,7 +84,7 @@ export default function KanbanCard({ task, onClick }: KanbanCardProps) {
               )}
             />
           )}
-          {task.due_date && (
+          {visibleFields.includes('due_date') && task.due_date && (
             <span>{new Date(task.due_date).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}</span>
           )}
         </div>

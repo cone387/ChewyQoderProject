@@ -121,18 +121,26 @@ const TaskItem = ({
           )}
           
           {/* 标签 */}
-          {visibleFields.includes('tags') && task.tags && Array.isArray(task.tags) && task.tags.length > 0 && typeof task.tags[0] === 'object' && (
+          {visibleFields.includes('tags') && task.tags && Array.isArray(task.tags) && task.tags.length > 0 && (
             <>
-              {task.tags.slice(0, 3).map((tag) => (
-                <span
-                  key={typeof tag === 'object' ? tag.id : tag}
-                  className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded-md font-medium text-xs flex-shrink-0"
-                >
-                  {typeof tag === 'object' ? tag.name : tag}
+              {task.tags.slice(0, 3).map((tag) => {
+                // 只显示有效的标签对象
+                if (typeof tag === 'object' && tag.name) {
+                  return (
+                    <span
+                      key={tag.id}
+                      className="px-2 py-0.5 bg-purple-50 text-purple-600 rounded-md font-medium text-xs flex-shrink-0"
+                    >
+                      {tag.name}
+                    </span>
+                  )
+                }
+                return null
+              })}
+              {task.tags.filter(tag => typeof tag === 'object' && tag.name).length > 3 && (
+                <span className="text-xs text-gray-400 flex-shrink-0">
+                  +{task.tags.filter(tag => typeof tag === 'object' && tag.name).length - 3}
                 </span>
-              ))}
-              {task.tags.length > 3 && (
-                <span className="text-xs text-gray-400 flex-shrink-0">+{task.tags.length - 3}</span>
               )}
             </>
           )}

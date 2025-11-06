@@ -149,9 +149,8 @@ class TaskViewSet(viewsets.ModelViewSet):
         queryset = Task.objects.filter(user=request.user)
         
         if system_type == 'inbox':
-            # 收集箱: 未分配项目且未完成的任务
+            # 收集箱: 所有未完成的任务
             queryset = queryset.filter(
-                project__isnull=True,
                 is_deleted=False
             ).exclude(status='completed')
         elif system_type == 'completed':

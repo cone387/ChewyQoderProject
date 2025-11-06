@@ -100,7 +100,7 @@ const SortableGroupHeader = ({
 
   const handleStartEdit = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (groupName === '默认分组' || !onRename) return
+    if (!onRename) return
     setIsEditing(true)
     setEditName(groupName)
   }
@@ -154,7 +154,7 @@ const SortableGroupHeader = ({
             <span 
               className={cn(
                 "text-sm font-semibold text-gray-700",
-                groupName !== '默认分组' && onRename && "cursor-text hover:text-blue-600"
+                onRename && "cursor-text hover:text-blue-600"
               )}
               onClick={handleStartEdit}
             >
@@ -200,6 +200,7 @@ export default function TasksPage() {
   const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([])
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null)
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null)
+  const [tasksNeedEnrichment, setTasksNeedEnrichment] = useState(false)
   
   // 筛选状态
   const [filterProjects, setFilterProjects] = useState<number[]>([])
@@ -281,8 +282,11 @@ export default function TasksPage() {
     if (newGroups.length > 0) {
       setGroupOrder([...groupOrder, ...newGroups])
     }
-    // 移除已删除的分组
-    const validGroups = groupOrder.filter(g => g === '默认分组' || customGroups.includes(g))
+    // 移除已删除的分组（但保留默认分组和自定义分组）
+    const validGroups = groupOrder.filter(g => {
+      // 保留默认分组或在customGroups中的分组
+      return g === '默认分组' || customGroups.includes(g)
+    })
     if (validGroups.length !== groupOrder.length) {
       setGroupOrder(validGroups)
     }
@@ -311,6 +315,29 @@ export default function TasksPage() {
       }
     }
   }, [currentView])
+
+  // 当tags或projects加载完成后，重新转换任务数据
+  useEffect(() => {
+    if ((tags.length > 0 || projects.length > 0) && tasks.length > 0 && tasksNeedEnrichment) {
+      // 检查是否有任务需要转换
+      const needsTagEnrichment = tasks.some(task => 
+        task.tags && 
+        Array.isArray(task.tags) && 
+        task.tags.length > 0 && 
+        typeof task.tags[0] === 'number'
+      )
+      
+      const needsProjectEnrichment = tasks.some(task =>
+        task.project && typeof task.project === 'number'
+      )
+      
+      if (needsTagEnrichment || needsProjectEnrichment) {
+        const enrichedData = enrichTasksWithTags(tasks)
+        setTasks(enrichedData)
+        setTasksNeedEnrichment(false) // 标记已完成转换
+      }
+    }
+  }, [tags.length, projects.length, tasksNeedEnrichment, tasks.length])
 
   useEffect(() => {
     // 保存分组展开状态到 localStorage
@@ -348,6 +375,37 @@ export default function TasksPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // 将任务的标签ID和项目ID转换为对象
+  const enrichTasksWithTags = (tasks: Task[]): Task[] => {
+    return tasks.map(task => {
+      let enrichedTask = { ...task }
+      
+      // 转换标签
+      if (enrichedTask.tags && Array.isArray(enrichedTask.tags)) {
+        const enrichedTags = enrichedTask.tags
+          .map(tagId => {
+            if (typeof tagId === 'number') {
+              return tags.find(t => t.id === tagId)
+            }
+            return tagId // 已经是对象了
+          })
+          .filter(tag => tag !== undefined) as Tag[]
+        
+        enrichedTask = { ...enrichedTask, tags: enrichedTags }
+      }
+      
+      // 转换项目
+      if (enrichedTask.project && typeof enrichedTask.project === 'number') {
+        const projectObj = projects.find(p => p.id === enrichedTask.project)
+        if (projectObj) {
+          enrichedTask = { ...enrichedTask, project: projectObj }
+        }
+      }
+      
+      return enrichedTask
+    })
+  }
+
   const loadTasksForView = async () => {
     try {
       setIsLoading(true)
@@ -362,7 +420,11 @@ export default function TasksPage() {
         data = response.results
       }
 
-      setTasks(Array.isArray(data) ? data : [])
+      // 转换标签ID为标签对象
+      const enrichedData = enrichTasksWithTags(data)
+      setTasks(Array.isArray(enrichedData) ? enrichedData : [])
+      // 标记需要enrichment（如果tags/projects还未加载）
+      setTasksNeedEnrichment(true)
     } catch (error) {
       console.error('加载任务失败:', error)
       toast.error('加载任务失败')
@@ -409,7 +471,9 @@ export default function TasksPage() {
         ...taskData,
         project: typeof currentView === 'number' ? currentView : undefined,
       })
-      setTasks([newTask, ...tasks])
+      // 转换标签
+      const enrichedTask = enrichTasksWithTags([newTask])[0]
+      setTasks([enrichedTask, ...tasks])
       setIsModalOpen(false)
       toast.success('任务创建成功')
     } catch (error) {
@@ -422,12 +486,14 @@ export default function TasksPage() {
     try {
       const newStatus = task.status === 'completed' ? 'todo' : 'completed'
       const updated = await taskService.updateTask(task.id, { status: newStatus })
+      // 转换标签
+      const enrichedTask = enrichTasksWithTags([updated])[0]
       
       if (newStatus === 'completed' && currentView !== 'completed') {
         // 如果不在已完成视图，从列表中移除
         setTasks(tasks.filter(t => t.id !== task.id))
       } else {
-        setTasks(tasks.map(t => t.id === task.id ? updated : t))
+        setTasks(tasks.map(t => t.id === task.id ? enrichedTask : t))
       }
       
       toast.success(newStatus === 'completed' ? '任务已完成' : '任务标记为未完成')
@@ -439,7 +505,9 @@ export default function TasksPage() {
   const handleUpdateTask = async (taskId: number, updates: Partial<Task>) => {
     try {
       const updated = await taskService.updateTask(taskId, updates)
-      setTasks(tasks.map(t => t.id === taskId ? updated : t))
+      // 转换标签
+      const enrichedTask = enrichTasksWithTags([updated])[0]
+      setTasks(tasks.map(t => t.id === taskId ? enrichedTask : t))
       toast.success('任务更新成功')
       
       // 如果状态变为已完成，且当前不在“已完成”视图，则从列表中移除
@@ -489,14 +557,25 @@ export default function TasksPage() {
 
   const handleRenameGroup = (oldName: string, newName: string) => {
     if (oldName === newName) return
-    if (customGroups.includes(newName)) {
+    
+    // 检查新名称是否已存在
+    if (customGroups.includes(newName) || newName === '默认分组') {
       toast.error('分组名称已存在')
       return
     }
-    // 更新customGroups
-    setCustomGroups(customGroups.map(g => g === oldName ? newName : g))
+    
+    // 如果重命名的是默认分组，需要特殊处理
+    if (oldName === '默认分组') {
+      // 默认分组重命名后变为自定义分组
+      setCustomGroups([...customGroups, newName])
+    } else {
+      // 更新customGroups
+      setCustomGroups(customGroups.map(g => g === oldName ? newName : g))
+    }
+    
     // 更新groupOrder
     setGroupOrder(groupOrder.map(g => g === oldName ? newName : g))
+    
     // 更新任务的custom_group
     const tasksToUpdate = tasks.filter(t => (t as any).custom_group === oldName)
     tasksToUpdate.forEach(async (task) => {
@@ -607,23 +686,22 @@ export default function TasksPage() {
 
     if (groupBy === 'status') {
       // 自定义分组模式
-      // 先按照用户创建的分组名称进行分组
-      customGroups.forEach(groupName => {
+      // 先按照groupOrder的顺序创建分组
+      groupOrder.forEach(groupName => {
         groups[groupName] = []
       })
       
-      // 添加默认分组（用于未分配的任务）
-      groups['默认分组'] = []
-      
       // 将任务分配到对应的分组
       sortedTasks.forEach(task => {
-        // TODO: 这里需要任务模型有一个 custom_group 字段
-        // 暂时都放到默认分组
         const taskGroup = (task as any).custom_group || '默认分组'
         if (groups[taskGroup]) {
           groups[taskGroup].push(task)
         } else {
-          groups['默认分组'].push(task)
+          // 如果任务的分组不在groupOrder中，放到默认分组
+          const defaultGroup = groupOrder.find(g => g === '默认分组') || groupOrder[0]
+          if (groups[defaultGroup]) {
+            groups[defaultGroup].push(task)
+          }
         }
       })
     } else if (groupBy === 'priority') {
@@ -646,18 +724,47 @@ export default function TasksPage() {
         groups[name] = tasks
       })
     } else if (groupBy === 'tag') {
-      // 按标签分组
-      const tagged: Task[] = []
+      // 按标签分组 - 使用具体标签名
+      const tagMap = new Map<string, Task[]>()
       const untagged: Task[] = []
+      
       sortedTasks.forEach(task => {
+        let hasValidTag = false
+        
         if (task.tags && Array.isArray(task.tags) && task.tags.length > 0) {
-          tagged.push(task)
-        } else {
+          // 一个任务可能有多个标签，每个标签都创建一个分组
+          task.tags.forEach(tag => {
+            // 确保使用标签对象的name属性
+            if (typeof tag === 'object' && tag.name) {
+              hasValidTag = true
+              const tagName = tag.name
+              if (!tagMap.has(tagName)) {
+                tagMap.set(tagName, [])
+              }
+              // 避免重复添加同一任务
+              const tagTasks = tagMap.get(tagName)!
+              if (!tagTasks.find(t => t.id === task.id)) {
+                tagTasks.push(task)
+              }
+            }
+          })
+        }
+        
+        // 如果没有有效标签，添加到未标记分组
+        if (!hasValidTag) {
           untagged.push(task)
         }
       })
-      if (tagged.length > 0) groups['已标记'] = tagged
-      if (untagged.length > 0) groups['未标记'] = untagged
+      
+      // 将tagMap转换为groups对象
+      tagMap.forEach((tasks, tagName) => {
+        groups[tagName] = tasks
+      })
+      
+      // 添加未标记分组
+      if (untagged.length > 0) {
+        groups['未标记'] = untagged
+      }
     } else if (groupBy === 'date') {
       // 按截止日期分组
       const now = new Date()
@@ -1403,6 +1510,7 @@ export default function TasksPage() {
                                 key={task.id}
                                 task={task}
                                 onClick={setSelectedTask}
+                                visibleFields={visibleFields}
                               />
                             ))}
                           </div>

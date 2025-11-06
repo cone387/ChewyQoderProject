@@ -393,7 +393,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate, custo
 
           {/* 标签 - 图标 + 选项 */}
           <div className="flex items-start gap-3">
-            <span title="标签" className="flex-shrink-0 mt-1 cursor-help">
+            <span title="标签" className="flex-shrink-0 mt-[1px] cursor-help">
               <TagIcon className="w-4 h-4 text-gray-500" />
             </span>
             <div className="flex-1">
@@ -439,7 +439,7 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate, custo
               )}
 
               {/* 显示已选标签 */}
-              {selectedTags.length > 0 ? (
+              {selectedTags.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {selectedTags.map(tagId => {
                     const tag = tags.find(t => t.id === tagId)
@@ -460,8 +460,6 @@ const TaskDetail = ({ task, isOpen, onClose, onUpdate, onDelete, onCreate, custo
                     )
                   })}
                 </div>
-              ) : (
-                <p className="text-xs text-gray-400">暂无标签</p>
               )}
             </div>
           </div>
