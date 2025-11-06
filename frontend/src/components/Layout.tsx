@@ -117,11 +117,17 @@ export default function Layout() {
   const pinnedProjects = Array.isArray(projects) ? projects.filter(p => p.is_pinned) : []
   const normalProjects = Array.isArray(projects) ? projects.filter(p => !p.is_pinned) : []
 
-  const moreMenuItems = [
+  type MoreMenuItem = 
+    | { to: string; icon: any; label: string; view?: never; count?: never }
+    | { view: 'completed' | 'trash'; icon: any; label: string; count?: number; to?: never }
+
+  const moreMenuItems: MoreMenuItem[] = [
     { to: '/calendar', icon: Calendar, label: '日历' },
     { to: '/tags', icon: Tag, label: '标签' },
     { to: '/projects', icon: FolderKanban, label: '项目管理' },
     { to: '/reports', icon: BarChart3, label: '统计' },
+    { view: 'completed', icon: CheckCircle2, label: '已完成', count: completedCount },
+    { view: 'trash', icon: Trash2, label: '垃圾筒', count: trashCount },
   ]
 
   return (
@@ -157,6 +163,7 @@ export default function Layout() {
         <nav className="flex-1 px-3 py-4 overflow-y-auto">
           {/* System Lists */}
           <div className="space-y-1 mb-4">
+            {/* 收集箱 */}
             <button
               onClick={() => handleSelectView('inbox')}
               className={cn(
@@ -175,54 +182,6 @@ export default function Layout() {
                   {inboxCount > 0 && (
                     <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
                       {inboxCount}
-                    </span>
-                  )}
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={() => handleSelectView('completed')}
-              className={cn(
-                'w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
-                selectedView === 'completed'
-                  ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600 font-medium shadow-sm'
-                  : 'text-gray-700 hover:bg-gray-50',
-                isSidebarCollapsed && 'justify-center'
-              )}
-              title={isSidebarCollapsed ? '已完成' : undefined}
-            >
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-              {!isSidebarCollapsed && (
-                <>
-                  <span className="flex-1 text-left">已完成</span>
-                  {completedCount > 0 && (
-                    <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
-                      {completedCount}
-                    </span>
-                  )}
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={() => handleSelectView('trash')}
-              className={cn(
-                'w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200',
-                selectedView === 'trash'
-                  ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600 font-medium shadow-sm'
-                  : 'text-gray-700 hover:bg-gray-50',
-                isSidebarCollapsed && 'justify-center'
-              )}
-              title={isSidebarCollapsed ? '垃圾筒' : undefined}
-            >
-              <Trash2 className="w-5 h-5 flex-shrink-0" />
-              {!isSidebarCollapsed && (
-                <>
-                  <span className="flex-1 text-left">垃圾筒</span>
-                  {trashCount > 0 && (
-                    <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
-                      {trashCount}
                     </span>
                   )}
                 </>
@@ -399,20 +358,29 @@ export default function Layout() {
               <div className="mt-1 space-y-1 pl-4">
                 {moreMenuItems.map((item) => (
                   <button
-                    key={item.to}
+                    key={item.to || item.view}
                     onClick={() => {
-                      navigate(item.to)
+                      if (item.view) {
+                        handleSelectView(item.view as 'completed' | 'trash')
+                      } else if (item.to) {
+                        navigate(item.to)
+                      }
                       setIsMoreMenuOpen(false)
                     }}
                     className={cn(
                       'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200',
-                      location.pathname === item.to
+                      (item.to && location.pathname === item.to) || (item.view && selectedView === item.view)
                         ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600 font-medium'
                         : 'text-gray-700 hover:bg-gray-50'
                     )}
                   >
                     <item.icon className="w-4 h-4 flex-shrink-0" />
-                    <span className="text-sm">{item.label}</span>
+                    <span className="flex-1 text-left text-sm">{item.label}</span>
+                    {item.count !== undefined && item.count > 0 && (
+                      <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
+                        {item.count}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
