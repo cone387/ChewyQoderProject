@@ -225,3 +225,5 @@ staticfiles/
 # OS
 .DS_Store
 Thumbs.db
+ChewySpaceServer
+ChewySpaceWeb
